@@ -156,7 +156,7 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount)
         player->framesCounter = 0;
         // Optionally rest to a specific idle frame, e.g., currentFrame = 0
         player->currentFrame = 0;
-        player->frameRec.x = 0; // Or leave it alone to stop on current frame: `player->frameRec.x = (float)player->currentFrame * player->frameRec.width;`
+        player->frameRec.x = 0; // Or leave it alone to stop on current frame: player->frameRec.x = (float)player->currentFrame * player->frameRec.width;
     }
 
     player->frameRec.y = (float)renderRow * player->frameRec.height;
