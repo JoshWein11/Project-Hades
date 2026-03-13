@@ -15,8 +15,7 @@ void InitScreenGameplay(void)
     const GameSettings* settings = GetSettings();
     
     InitCharacter(&player, settings->screenWidth / 2, settings->screenHeight / 2, 
-                  "../assets/character/Unarmed_Walk_with_shadow.png", 6, 
-                  "../assets/character/Unarmed_Run_with_shadow.png", 8);
+                  "../assets/character/Adrian_Walk.png", 16, 2);
 
     LoadTiledMap(&map, "../assets/map/level1.json");
     InitWeapon(&playerWeapon);
