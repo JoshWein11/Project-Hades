@@ -1,11 +1,13 @@
 #include "raylib.h"
-#include "raymath.h"
 #include "setting.h"
-#include "character.h"
-#include "tiled_map.h"
-#include "weapon.h"
+#include "screens.h"
 
-typedef enum GameScreen { GAMEPLAY, SETTINGS } GameScreen;
+// Include all screen modules
+#include "screen_splash.h"
+#include "screen_menu.h"
+#include "screen_dialogue.h"
+#include "screen_gameplay.h"
+
 int main(void)
 {
     // Initialize our settings module
@@ -15,105 +17,97 @@ int main(void)
     // Use settings for window initialization
     InitWindow(settings->screenWidth, settings->screenHeight, settings->title);
 
+    // Initialize all screens
+    InitScreenSplash();
+    InitScreenMenu();
+    InitScreenDialogue();
+    InitScreenGameplay();
 
-    // Initialize our player character
-    Character player;
-    // THIS EXTREMELY IMPORTANT: We MUST call this after InitWindow!
-    InitCharacter(&player, settings->screenWidth / 2, settings->screenHeight / 2, 
-                  "../assets/character/Unarmed_Walk_with_shadow.png", 6, 
-                  "../assets/character/Unarmed_Run_with_shadow.png", 8);
-
-    MapData map;
-    LoadTiledMap(&map, "../assets/map/level1.json");
-
-    Weapon playerWeapon;
-    InitWeapon(&playerWeapon);
-
-    Camera2D camera = { 0 };
-    camera.target = (Vector2){ player.position.x, player.position.y };
-    camera.offset = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
-    camera.rotation = 0.0f;
-    camera.zoom = 2.0f;
-
-    GameScreen currentScreen = GAMEPLAY;
+    GameScreen currentScreen = SPLASH;
+    GameScreen previousScreen = MAIN_MENU;
+    bool exitGame = false;
 
     SetTargetFPS(60);
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while (!WindowShouldClose() && !exitGame && currentScreen != QUIT_GAME)
     {
-        // Toggle settings menu
+        // Global Input: Toggle settings menu
         if (IsKeyPressed(KEY_M)) {
-            if (currentScreen == GAMEPLAY) currentScreen = SETTINGS;
-            else currentScreen = GAMEPLAY;
-        }
-
-        if (currentScreen == GAMEPLAY) {
-            float dt = GetFrameTime();
-            
-            // Update character logic 
-            UpdateCharacter(&player, map.collisionRecs, map.collisionCount);
-            
-            // Update bullets
-            UpdateWeapon(&playerWeapon, dt, map.collisionRecs, map.collisionCount);
-            
-            // Update camera to follow player
-            camera.offset = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
-            camera.target = (Vector2){ player.position.x + (player.frameRec.width * player.scale) / 2.0f, 
-                                       player.position.y + (player.frameRec.height * player.scale) / 2.0f };
-                                       
-            // Check for shooting input
-            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-                Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
-                // Shoot from the center of the player
-                Vector2 startPos = { player.position.x + (player.frameRec.width * player.scale) / 2.0f, 
-                                     player.position.y + (player.frameRec.height * player.scale) / 2.0f };
-                ShootWeapon(&playerWeapon, startPos, mouseWorldPos);
+            if (currentScreen == GAMEPLAY || currentScreen == MAIN_MENU) {
+                previousScreen = currentScreen;
+                currentScreen = SETTINGS;
+            } else if (currentScreen == SETTINGS) {
+                currentScreen = previousScreen;
             }
-        } else if (currentScreen == SETTINGS) {
-            // Settings logic
-            if (IsKeyPressed(KEY_ONE)) ApplyResolution(800, 600);
-            else if (IsKeyPressed(KEY_TWO)) ApplyResolution(1280, 720);
-            else if (IsKeyPressed(KEY_THREE)) ApplyResolution(1920, 1080);
         }
 
-        // Draw
-        BeginDrawing();
+        // --- UPDATE ---
+        switch (currentScreen) {
+            case SPLASH:
+                currentScreen = UpdateScreenSplash();
+                break;
+            case MAIN_MENU:
+                currentScreen = UpdateScreenMenu();
+                // Special case for settings toggle from within the menu module
+                if (currentScreen == SETTINGS) previousScreen = MAIN_MENU;
+                break;
+            case DIALOGUE:
+                currentScreen = UpdateScreenDialogue();
+                break;
+            case GAMEPLAY:
+                currentScreen = UpdateScreenGameplay();
+                break;
+            case SETTINGS:
+                // Settings logic
+                if (IsKeyPressed(KEY_ONE)) ApplyResolution(800, 600);
+                else if (IsKeyPressed(KEY_TWO)) ApplyResolution(1280, 720);
+                else if (IsKeyPressed(KEY_THREE)) ApplyResolution(1920, 1080);
+                break;
+            default: break;
+        }
 
+        // --- DRAW ---
+        BeginDrawing();
             ClearBackground(RAYWHITE);
 
-            if (currentScreen == GAMEPLAY) {
-                BeginMode2D(camera);
-                    DrawTiledMap(&map);
+            switch (currentScreen) {
+                case SPLASH:
+                    DrawScreenSplash();
+                    break;
+                case MAIN_MENU:
+                    DrawScreenMenu();
+                    break;
+                case DIALOGUE:
+                    DrawScreenDialogue();
+                    break;
+                case GAMEPLAY:
+                    DrawScreenGameplay();
+                    break;
+                case SETTINGS: {
+                    // Dim background
+                    DrawRectangle(0, 0, settings->screenWidth, settings->screenHeight, Fade(BLACK, 0.8f));
                     
-                    // Draw active bullets
-                    DrawWeapon(&playerWeapon);
-                    
-                    // Let the character module draw its sprite
-                    DrawCharacter(&player);
-                EndMode2D();
-                
-                DrawText("Move with Arrow Keys or WASD!", 10, 10, 20, DARKGRAY);
-                DrawText("Press 'M' for Settings | ESC to exit", 10, 40, 20, LIGHTGRAY);
-            } else if (currentScreen == SETTINGS) {
-                // Dim background
-                DrawRectangle(0, 0, settings->screenWidth, settings->screenHeight, Fade(BLACK, 0.8f));
-                
-                int centerX = settings->screenWidth / 2;
-                DrawText("SETTINGS MENU", centerX - MeasureText("SETTINGS MENU", 40) / 2, 100, 40, RAYWHITE);
-                DrawText("1. 800x600", centerX - MeasureText("1. 800x600", 20) / 2, 200, 20, RAYWHITE);
-                DrawText("2. 1280x790", centerX - MeasureText("2. 1280x720", 20) / 2, 250, 20, RAYWHITE);
-                DrawText("3. 1920x1080", centerX - MeasureText("3. 1920x1080", 20) / 2, 300, 20, RAYWHITE);
-                DrawText("Press 'M' to return to game", centerX - MeasureText("Press 'M' to return to game", 20) / 2, 400, 20, LIGHTGRAY);
+                    int centerX = settings->screenWidth / 2;
+                    DrawText("SETTINGS MENU", centerX - MeasureText("SETTINGS MENU", 40) / 2, 100, 40, RAYWHITE);
+                    DrawText("1. 800x600", centerX - MeasureText("1. 800x600", 20) / 2, 200, 20, RAYWHITE);
+                    DrawText("2. 1280x790", centerX - MeasureText("2. 1280x720", 20) / 2, 250, 20, RAYWHITE);
+                    DrawText("3. 1920x1080", centerX - MeasureText("3. 1920x1080", 20) / 2, 300, 20, RAYWHITE);
+                    DrawText("Press 'M' to return to game", centerX - MeasureText("Press 'M' to return to game", 20) / 2, 400, 20, LIGHTGRAY);
+                } break;
+                default: break;
             }
 
         EndDrawing();
     }
 
-    // De-Initialization
-    UnloadTiledMap(&map);
-    UnloadCharacter(&player); // VERY IMPORTANT: Free the sprite Texture RAM
-    CloseWindow();        // Close window and OpenGL context
+    // --- DE-INITIALIZATION ---
+    UnloadScreenGameplay();
+    UnloadScreenDialogue();
+    UnloadScreenMenu();
+    UnloadScreenSplash();
+
+    CloseWindow();
 
     return 0;
 }
