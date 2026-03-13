@@ -1,0 +1,11 @@
+# Ignore build artifacts and object files
+*.o
+*.a
+*.exe
+game.exe
+
+# Ignore VS/IDE files
+.vscode/
+*.swp
+
+# Do not ignore source/assets
