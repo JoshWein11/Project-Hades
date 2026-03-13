@@ -2,7 +2,7 @@
 
 void InitAudio(Audio* audio) {
     audio->bg_menu_music = LoadMusicStream("../assets/music/menubg.wav");
-    audio->sfxSplash = LoadSound("../assets/music/Doomed.wav");
+    audio->sfxSplash = LoadSound("../assets/music/opening.wav");
 }
 
 void UnloadAudio(Audio* audio) {
