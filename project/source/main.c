@@ -23,9 +23,31 @@ int main(void)
     InitScreenDialogue();
     InitScreenGameplay();
 
+<<<<<<< HEAD
     GameScreen currentScreen = SPLASH;
     GameScreen previousScreen = MAIN_MENU;
     bool exitGame = false;
+=======
+    // Initialize our player character
+    Character player;
+    // THIS EXTREMELY IMPORTANT: We MUST call this after InitWindow!
+    InitCharacter(&player, settings->screenWidth / 2, settings->screenHeight / 2, 
+                  "../assets/character/Adrian_Walk.png", 16, 2);
+
+    MapData map;
+    LoadTiledMap(&map, "../assets/map/level1.json");
+
+    Weapon playerWeapon;
+    InitWeapon(&playerWeapon);
+
+    Camera2D camera = { 0 };
+    camera.target = (Vector2){ player.position.x, player.position.y };
+    camera.offset = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
+    camera.rotation = 0.0f;
+    camera.zoom = 2.0f;
+
+    GameScreen currentScreen = GAMEPLAY;
+>>>>>>> c75b19db444be60dcfc555955ef93019a720f1e5
 
     SetTargetFPS(60);
 
