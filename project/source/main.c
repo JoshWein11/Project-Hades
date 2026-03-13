@@ -7,6 +7,7 @@
 #include "screen_menu.h"
 #include "screen_dialogue.h"
 #include "screen_gameplay.h"
+#include "audio.h"
 
 int main(void)
 {
@@ -23,10 +24,15 @@ int main(void)
     InitScreenDialogue();
     InitScreenGameplay();
 
+    // Initialize Audio
+    InitAudioDevice();
+    Audio gameAudio;
+    InitAudio(&gameAudio);
     
     GameScreen currentScreen = SPLASH;
     GameScreen previousScreen = MAIN_MENU;
     bool exitGame = false;
+    bool splashSoundPlayed = false;
     
     SetTargetFPS(60);
 
@@ -46,9 +52,18 @@ int main(void)
         // --- UPDATE ---
         switch (currentScreen) {
             case SPLASH:
+                if (!splashSoundPlayed) {
+                    PlaySound(gameAudio.sfxSplash);
+                    splashSoundPlayed = true;
+                }
                 currentScreen = UpdateScreenSplash();
                 break;
             case MAIN_MENU:
+                if (!IsMusicStreamPlaying(gameAudio.bg_menu_music)) {
+                    PlayMusicStream(gameAudio.bg_menu_music);
+                }
+                UpdateMusicStream(gameAudio.bg_menu_music);
+                
                 currentScreen = UpdateScreenMenu();
                 // Special case for settings toggle from within the menu module
                 if (currentScreen == SETTINGS) previousScreen = MAIN_MENU;
@@ -107,6 +122,9 @@ int main(void)
     UnloadScreenDialogue();
     UnloadScreenMenu();
     UnloadScreenSplash();
+
+    UnloadAudio(&gameAudio);
+    CloseAudioDevice();
 
     CloseWindow();
 

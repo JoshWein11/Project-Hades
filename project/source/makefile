@@ -6,7 +6,7 @@ AR = ar
 CFLAGS = -Wall -Iinclude
 
 # Linker flags (link our new setting lib, then raylib, then windows libs)
-LDFLAGS = -Llib -lchar -lsetting -lweapon -ltiled -lraylib -lopengl32 -lgdi32 -lwinmm
+LDFLAGS = -Llib -laudio -lchar -lsetting -lweapon -ltiled -lraylib -lopengl32 -lgdi32 -lwinmm
 
 # Target executable
 TARGET = game.exe
@@ -24,13 +24,15 @@ TILED_OBJ = module/tiled_map.o
 TILED_LIB = lib/libtiled.a
 WEAPON_OBJ = module/weapon.o
 WEAPON_LIB = lib/libweapon.a
+AUDIO_OBJ = module/audio.o
+AUDIO_LIB = lib/libaudio.a
 
 
 # Default rule
 all: $(TARGET)
 
 # Link the final executable using the main object and our newly built library
-$(TARGET): $(MAIN_OBJ) $(SCREENS_OBJ) $(SETTING_LIB) $(CHAR_LIB) $(TILED_LIB) $(WEAPON_LIB)
+$(TARGET): $(MAIN_OBJ) $(SCREENS_OBJ) $(SETTING_LIB) $(CHAR_LIB) $(TILED_LIB) $(WEAPON_LIB) $(AUDIO_LIB)
 	$(CC) $(MAIN_OBJ) $(SCREENS_OBJ) -o $(TARGET) $(CFLAGS) $(LDFLAGS) 
 
 # Create the static library for the setting module
@@ -46,10 +48,13 @@ $(TILED_LIB): $(TILED_OBJ)
 $(WEAPON_LIB): $(WEAPON_OBJ)
 	$(AR) rcs $@ $^
 
+$(AUDIO_LIB): $(AUDIO_OBJ)
+	$(AR) rcs $@ $^
+
 # Generic rule to compile any .c file into a .o object file
 %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS)
 
 # Rule to clean up compiled files (Windows commands)
 clean:
-	del /Q $(TARGET) $(MAIN_OBJ) $(SCREENS_OBJ) module\setting.o lib\libsetting.a module\character.o lib\libchar.a module\tiled_map.o lib\libtiled.a module\weapon.o lib\libweapon.a
+	del /Q $(TARGET) $(MAIN_OBJ) $(SCREENS_OBJ) module\setting.o lib\libsetting.a module\character.o lib\libchar.a module\tiled_map.o lib\libtiled.a module\weapon.o lib\libweapon.a module\audio.o lib\libaudio.a

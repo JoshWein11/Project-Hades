@@ -14,7 +14,7 @@ void InitScreenSplash(void)
 GameScreen UpdateScreenSplash(void)
 {
     splashFrames++;
-    if (splashFrames > 180) { // 3 seconds at 60 FPS
+    if (splashFrames > 300) { // 5 seconds at 60 FPS
         return MAIN_MENU;
     }
     return SPLASH;
@@ -27,7 +27,7 @@ void DrawScreenSplash(void)
     
     // Calculate alpha for fade in / fade out
     if (splashFrames < 60) alpha = splashFrames / 60.0f;
-    else if (splashFrames > 120) alpha = 1.0f - ((splashFrames - 120) / 60.0f);
+    else if (splashFrames > 240) alpha = 1.0f - ((splashFrames - 240) / 60.0f);
     
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
