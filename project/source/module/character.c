@@ -5,7 +5,10 @@
 
 void InitCharacter(Character* player, int startX, int startY, const char* spritePath, int cols, int rows){
     player->position = (Vector2){ (float)startX, (float)startY };
-    player->speed = (Vector2){ 3.0f, 3.0f };
+    player->velocity = (Vector2){ 0.0f, 0.0f };
+    player->maxSpeed = 300.0f;
+    player->acceleration = 2000.0f;
+    player->friction = 1400.0f;
     player->scale = 1.5f;
 
     // Load sprite
@@ -30,23 +33,37 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->dashSpeed = 1600.0f; 
     player->dashDuration = 0.25f;
     player->dashTime = 0.0f;
-    player->dashCooldown = 1.0f; 
-    player->dashCooldownTimer = 0.0f;
     player->dashProgress = 0.0f;
     player->playerInvincible = false;
+
+    // Stamina Variables Init
+    player->maxStamina = 100.0f;
+    player->stamina = player->maxStamina;
+    player->dashCost = 34.0f;
+    player->staminaRegenRate = 30.0f;
+    
+    // Health Init
+    player->maxHealth = 100.0f;
+    player->health = player->maxHealth;
+    
+    // Trail Init
+    player->trailCount = 0;
 }
 
-void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount){
+void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos){
     bool isMoving = false;
     float dt = GetFrameTime();
 
-    // Dash cooldown
-    if (player->dashCooldownTimer > 0.0f) {
-        player->dashCooldownTimer -= dt;
+    // Stamina Regeneration (Only when not dashing)
+    if (!player->isDashing) {
+        player->stamina += player->staminaRegenRate * dt;
+        if (player->stamina > player->maxStamina) {
+            player->stamina = player->maxStamina;
+        }
     }
 
-    // Dash start logic
-    if (IsKeyPressed(KEY_LEFT_SHIFT) && player->dashCooldownTimer <= 0.0f && !player->isDashing) {
+    // Dash start logic - now checks and consumes Stamina instead of waiting for cooldown
+    if (IsKeyPressed(KEY_LEFT_SHIFT) && player->stamina >= player->dashCost && !player->isDashing) {
         float inputDx = 0.0f;
         float inputDy = 0.0f;
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) inputDx += 1.0f;
@@ -62,8 +79,9 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount)
             player->isDashing = true;
             player->dashTime = player->dashDuration;
             player->dashProgress = 0.0f;
-            player->dashCooldownTimer = player->dashCooldown;
+            player->stamina -= player->dashCost; // Consume stamina
             player->playerInvincible = true;
+            player->trailCount = 0; // Reset trail length for new dash
         }
     }
 
@@ -78,34 +96,86 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount)
         dx = player->dashDir.x * player->dashSpeed * speedMultiplier * dt;
         dy = player->dashDir.y * player->dashSpeed * speedMultiplier * dt;
 
+        // Record dash trail ghost effect every frame
+        if (player->trailCount < MAX_DASH_TRAIL) {
+            player->trail[player->trailCount].position = player->position;
+            player->trail[player->trailCount].frameRec = player->frameRec;
+            player->trail[player->trailCount].alpha = 0.6f;
+            player->trailCount++;
+        }
+
         player->dashTime -= dt;
         if (player->dashTime <= 0.0f) {
             player->isDashing = false;
             player->playerInvincible = false;
         }
     } else {
-        // Normal movement
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) dx += player->speed.x;
-        if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) dx -= player->speed.x;
-        if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) dy -= player->speed.y;
-        if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) dy += player->speed.y;
+        // Normal movement physics (Acceleration and Friction)
+        float inputDx = 0.0f;
+        float inputDy = 0.0f;
+
+        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) inputDx += 1.0f;
+        if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) inputDx -= 1.0f;
+        if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)) inputDy -= 1.0f;
+        if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) inputDy += 1.0f;
+
+        if (inputDx != 0.0f || inputDy != 0.0f) {
+            // Normalize input
+            float inputLen = sqrtf(inputDx*inputDx + inputDy*inputDy);
+            inputDx /= inputLen;
+            inputDy /= inputLen;
+
+            // Apply Acceleration vector
+            player->velocity.x += inputDx * player->acceleration * dt;
+            player->velocity.y += inputDy * player->acceleration * dt;
+
+            // Cap velocity at maxSpeed
+            float currentSpeed = sqrtf(player->velocity.x*player->velocity.x + player->velocity.y*player->velocity.y);
+            if (currentSpeed > player->maxSpeed) {
+                player->velocity.x = (player->velocity.x / currentSpeed) * player->maxSpeed;
+                player->velocity.y = (player->velocity.y / currentSpeed) * player->maxSpeed;
+            }
+        } else {
+            // No input: Apply Friction
+            float currentSpeed = sqrtf(player->velocity.x*player->velocity.x + player->velocity.y*player->velocity.y);
+            if (currentSpeed > 0.0f) {
+                float drop = player->friction * dt;
+                float newSpeed = currentSpeed - drop;
+                if (newSpeed < 0.0f) newSpeed = 0.0f;
+                player->velocity.x = (player->velocity.x / currentSpeed) * newSpeed;
+                player->velocity.y = (player->velocity.y / currentSpeed) * newSpeed;
+            }
+        }
+
+        dx = player->velocity.x * dt;
+        dy = player->velocity.y * dt;
     }
 
     float newX = player->position.x + dx;
     float newY = player->position.y + dy;
 
-    if (dx > 0) player->movingDirection = 0; // Right
-    else if (dx < 0) player->movingDirection = 1; // Left
-    else if (dy < 0) player->movingDirection = 0; // Up
-    else if (dy > 0) player->movingDirection = 1; // Down
-
-    if (dx != 0.0f || dy != 0.0f) {
+    // Check if player has velocity for animation trigger
+    float velSpeed = sqrtf(player->velocity.x*player->velocity.x + player->velocity.y*player->velocity.y);
+    if (velSpeed > 5.0f || player->isDashing) {
         isMoving = true;
+    }
+
+    // Determine aiming/facing direction via mouse position completely independent of movement
+    float dxMouse = mouseWorldPos.x - (player->position.x + (player->frameRec.width * player->scale) / 2.0f);
+    float dyMouse = mouseWorldPos.y - (player->position.y + (player->frameRec.height * player->scale) / 2.0f);
+
+    if (fabs(dxMouse) > fabs(dyMouse)) {
+        if (dxMouse > 0) player->movingDirection = 0; // Look Right
+        else player->movingDirection = 1; // Look Left
+    } else {
+        if (dyMouse < 0) player->movingDirection = 2; // Look Up
+        else player->movingDirection = 3; // Look Down
     }
 
     int renderRow = player->movingDirection;
     if (renderRow >= player->rows) {
-        renderRow = 0; // Fallback to first row
+        // Fallback to Left/Right if the SpriteSheet doesn't have 4 rows yet
+        renderRow = (dxMouse > 0) ? 0 : 1;
     }
 
     // Recalculate frame dimension
@@ -156,13 +226,36 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount)
         player->framesCounter = 0;
         // Optionally rest to a specific idle frame, e.g., currentFrame = 0
         player->currentFrame = 0;
-        player->frameRec.x = 0; // Or leave it alone to stop on current frame: player->frameRec.x = (float)player->currentFrame * player->frameRec.width;
+        player->frameRec.x = 0; // Or leave it alone to stop on current frame: `player->frameRec.x = (float)player->currentFrame * player->frameRec.width;`
     }
 
     player->frameRec.y = (float)renderRow * player->frameRec.height;
 }
 
 void DrawCharacter(Character* player){
+    // 1. Render Ghost Dash Trails beneath player
+    for (int i = 0; i < player->trailCount; i++) {
+        Rectangle dest = {
+            player->trail[i].position.x,
+            player->trail[i].position.y,
+            player->trail[i].frameRec.width * player->scale,
+            player->trail[i].frameRec.height * player->scale
+        };
+        DrawTexturePro(player->sprite, player->trail[i].frameRec, dest, (Vector2){0,0}, 0.0f, Fade(SKYBLUE, player->trail[i].alpha));
+        
+        // Decay the alpha so the trail fades over time
+        player->trail[i].alpha -= GetFrameTime() * 1.5f; 
+    }
+    
+    // Cleanup invisible trail pieces from array by keeping track of the count
+    if (player->trailCount > 0 && player->trail[0].alpha <= 0.0f) {
+        for (int i=1; i < player->trailCount; i++) {
+            player->trail[i-1] = player->trail[i]; // Shift them over
+        }
+        player->trailCount--;
+    }
+
+    // 2. Render actual Player
     Rectangle destRec = {
         player->position.x,
         player->position.y,
@@ -170,8 +263,54 @@ void DrawCharacter(Character* player){
         player->frameRec.height * player->scale
     };
     
-    Vector2 origin = {0.0f, 0.0f};
-    DrawTexturePro(player->sprite, player->frameRec, destRec, origin, 0.0f, WHITE);
+    DrawTexturePro(player->sprite, player->frameRec, destRec, (Vector2){0.0f, 0.0f}, 0.0f, WHITE);
+
+    // 3. Draw Stamina bar ONLY when not full (so it's hidden at max stamina)
+    if (player->stamina < player->maxStamina) {
+        float centerX = player->position.x + (player->frameRec.width * player->scale) / 2.0f;
+        float bottomY = player->position.y + (player->frameRec.height * player->scale);
+        float barWidth = 40.0f;
+        float barHeight = 4.0f;
+        float fillPercentage = player->stamina / player->maxStamina;
+        DrawRectangle(centerX - barWidth/2.0f, bottomY + 5.0f, barWidth, barHeight, Fade(DARKGRAY, 0.6f));
+        DrawRectangle(centerX - barWidth/2.0f, bottomY + 5.0f, barWidth * fillPercentage, barHeight, Fade(LIME, 0.8f));
+    }
+}
+
+void DrawCharacterHUD(Character* player, Texture2D portrait) {
+    int screenH = GetScreenHeight();
+
+    // --- Portrait Frame ---
+    int portraitSize = 60;
+    int padding = 16;
+    int portraitX = padding;
+    int portraitY = screenH - portraitSize - padding - 30;
+
+    // Dark background for portrait
+    DrawRectangle(portraitX - 4, portraitY - 4, portraitSize + 8, portraitSize + 8, Fade(BLACK, 0.7f));
+    // Draw the portrait sprite (first frame of sprite sheet, facing right)
+    Rectangle srcRec = { 0.0f, 0.0f, (float)portrait.width / player->frames, (float)portrait.height / player->rows };
+    Rectangle dstRec = { (float)portraitX, (float)portraitY, (float)portraitSize, (float)portraitSize };
+    DrawTexturePro(portrait, srcRec, dstRec, (Vector2){0, 0}, 0.0f, WHITE);
+    // White border around portrait
+    DrawRectangleLinesEx((Rectangle){portraitX - 4, portraitY - 4, portraitSize + 8, portraitSize + 8}, 2, WHITE);
+
+    // --- Health Bar ---
+    int barX = portraitX + portraitSize + 8 + 4;
+    int barY = portraitY + portraitSize / 2 - 6;
+    int barW = 150;
+    int barH = 14;
+    float healthPct = player->health / player->maxHealth;
+
+    // Background
+    DrawRectangle(barX, barY, barW, barH, Fade(DARKGRAY, 0.8f));
+    // Health fill (red grad: full = green-ish red, low = full red)
+    Color healthColor = (healthPct > 0.5f) ? (Color){34, 197, 94, 220} : (healthPct > 0.25f) ? (Color){234, 179, 8, 220} : (Color){220, 38, 38, 220};
+    DrawRectangle(barX, barY, (int)(barW * healthPct), barH, healthColor);
+    // Border
+    DrawRectangleLinesEx((Rectangle){barX, barY, barW, barH}, 1, Fade(WHITE, 0.5f));
+    // HP text
+    DrawText(TextFormat("%d / %d", (int)player->health, (int)player->maxHealth), barX + 4, barY + 1, 10, WHITE);
 }
 
 void UnloadCharacter(Character* player){

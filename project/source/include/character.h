@@ -4,9 +4,20 @@
 #include "raylib.h"
 #include <stdbool.h>
 
+#define MAX_DASH_TRAIL 15
+
 typedef struct {
     Vector2 position;
-    Vector2 speed;
+    Rectangle frameRec;
+    float alpha;
+} DashFrame;
+
+typedef struct {
+    Vector2 position;
+    Vector2 velocity;
+    float maxSpeed;
+    float acceleration;
+    float friction;
     float scale;
 
     // Animation Fields
@@ -27,9 +38,21 @@ typedef struct {
     float dashSpeed;
     float dashDuration;
     float dashTime;
-    float dashCooldown;
-    float dashCooldownTimer;
     float dashProgress;
+
+    // Stamina Variables
+    float stamina;
+    float maxStamina;
+    float staminaRegenRate;
+    float dashCost;
+
+    // Health
+    float health;
+    float maxHealth;
+
+    // Dash Trail
+    DashFrame trail[MAX_DASH_TRAIL];
+    int trailCount;
 
     // Dash Optional Invincibility
     bool playerInvincible;
@@ -40,10 +63,13 @@ typedef struct {
 void InitCharacter(Character* player, int startX, int startY, const char* spritePath, int cols, int rows);
 
 // Update logic and animations
-void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount);
+void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos);
 
 // Draw the correct frame from the active sprite sheet
 void DrawCharacter(Character* player);
+
+// Draw the HUD (health bar, portrait, stamina) to screen-space
+void DrawCharacterHUD(Character* player, Texture2D portrait);
 
 // Free up the RAM when the game closes
 void UnloadCharacter(Character* player);
