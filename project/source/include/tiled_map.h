@@ -1,4 +1,4 @@
-#ifndef TILED_MAP_H
+#ifndef TILED_MAP_H //Code Written By: Christopher 沈家豪
 #define TILED_MAP_H
 
 #include "raylib.h"
@@ -15,8 +15,8 @@ typedef struct {
     int collisionCount;
 } MapData;
 
-void LoadTiledMap(MapData* mapData, const char* jsonPath);
-void DrawTiledMap(MapData* mapData);
-void UnloadTiledMap(MapData* mapData);
+void LoadTiledMap(MapData* mapData, const char* jsonPath); //Load Tiled Map From Assets JSON File
+void DrawTiledMap(MapData* mapData); //Draw Tiled Map
+void UnloadTiledMap(MapData* mapData); //Unload Tiled Map
 
 #endif

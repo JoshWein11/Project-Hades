@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_setting.h"
 #include "setting.h"
 #include <stdio.h>

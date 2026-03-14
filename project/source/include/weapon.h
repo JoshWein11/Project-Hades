@@ -1,5 +1,5 @@
-#ifndef WEAPON_H
-#define WEAPON_H
+#ifndef WEAPON_H //All Code Written By: Josh
+#define WEAPON_H //Still a Prototype, Might be Deleted or Updated in the Future
 
 #include "raylib.h"
 

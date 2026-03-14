@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_menu.h"
 #include "setting.h"
 
@@ -6,7 +6,7 @@ static Texture2D menuLogo;
 
 void InitScreenMenu(void)
 {
-    menuLogo = LoadTexture("../assets/images/menu.png");
+    menuLogo = LoadTexture("../assets/images/menu.png"); //Load Menu Logo from Assets
 }
 
 GameScreen UpdateScreenMenu(void)
@@ -16,10 +16,12 @@ GameScreen UpdateScreenMenu(void)
     float centerX = settings->screenWidth / 2.0f;
     float centerY = settings->screenHeight / 2.0f;
     
+    //Make a Button in the main menu
     Rectangle startBtn = { centerX - 100, centerY - 10, 200, 50 };
     Rectangle settingsBtn = { centerX - 100, centerY + 60, 200, 50 };
     Rectangle quitBtn = { centerX - 100, centerY + 130, 200, 50 };
 
+    //Check if the mouse is clicked
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (CheckCollisionPointRec(mousePoint, startBtn)) {
             return DIALOGUE;
@@ -33,7 +35,7 @@ GameScreen UpdateScreenMenu(void)
     return MAIN_MENU;
 }
 
-void DrawScreenMenu(void)
+void DrawScreenMenu(void) //Draw the Screen
 {
     const GameSettings* settings = GetSettings();
     int centerX = settings->screenWidth / 2;

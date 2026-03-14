@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_splash.h"
 #include "setting.h"
 
@@ -8,6 +8,7 @@ static Texture2D splashLogo;
 void InitScreenSplash(void)
 {
     splashFrames = 0;
+    //Load Splash Logo from Assets
     splashLogo = LoadTexture("../assets/images/logo.png");
 }
 
@@ -40,6 +41,7 @@ void DrawScreenSplash(void)
                        settings->screenHeight / 2.0f - (splashLogo.height * scale) / 2.0f },
             0.0f, scale, Fade(WHITE, alpha));
     } else {
+        //Draw Text if no Logo incase the logo is not loaded
         int textWidth = MeasureText("YOUR LOGO HERE", 60);
         DrawText("YOUR LOGO HERE", settings->screenWidth / 2 - textWidth / 2, settings->screenHeight / 2 - 30, 60, Fade(BLACK, alpha));
     }

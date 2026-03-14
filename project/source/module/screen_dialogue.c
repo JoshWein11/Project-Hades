@@ -1,10 +1,11 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_dialogue.h"
 #include "setting.h"
 #include <string.h>
 
 static int framesCounter = 0;
 static char dialogueCurrent[256] = "\0";
+// Dialogue still a prototype, might be deleted or updated in the future
 static const char dialogueFull[] = "Welcome to Protocol Hades. Your mission begins now...";
 static int dialogueLength = 0;
 static int textIndex = 0;

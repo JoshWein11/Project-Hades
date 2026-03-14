@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Josh and Christopher 沈家豪 
 #include "setting.h"
 #include "screens.h"
 
@@ -8,6 +8,8 @@
 #include "screen_dialogue.h"
 #include "screen_gameplay.h"
 #include "screen_setting.h"
+
+// Include Audio Module
 #include "audio.h"
 
 #include <stdio.h>

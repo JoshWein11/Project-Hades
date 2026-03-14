@@ -1,4 +1,4 @@
-#include "raylib.h"
+#include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_gameplay.h"
 #include "character.h"
 #include "audio.h"
@@ -14,13 +14,17 @@ static Camera2D camera = { 0 };
 void InitScreenGameplay(void)
 {
     const GameSettings* settings = GetSettings();
-    
+    //Initialize Player
     InitCharacter(&player, settings->screenWidth / 2, settings->screenHeight / 2, 
                   "../assets/character/Adrian_Walk.png", 16, 2);
 
+    //Initialize Map
     LoadTiledMap(&map, "../assets/map/level1.json");
+    
+    //Initialize Weapon
     InitWeapon(&playerWeapon);
 
+    //Initialize Camera
     camera.target = (Vector2){ player.position.x, player.position.y };
     camera.offset = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
     camera.rotation = 0.0f;
@@ -59,7 +63,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
 void DrawScreenGameplay(void)
 {
-    BeginMode2D(camera);
+    BeginMode2D(camera); // 2D Camera for Gameplay
         DrawTiledMap(&map);
         DrawWeapon(&playerWeapon);
         DrawCharacter(&player);

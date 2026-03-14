@@ -1,4 +1,4 @@
-#ifndef SETTING_H
+#ifndef SETTING_H //Code written by: Christopher 沈家豪
 #define SETTING_H
 
 typedef struct {
@@ -20,4 +20,4 @@ void ApplyResolution(int width, int height);
 // Sets the master volume (0.0 to 1.0)
 void SetMasterVolumeLevel(float volume);
 
-#endif // SETTING_H
+#endif
