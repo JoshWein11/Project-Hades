@@ -15,7 +15,7 @@ TARGET = game.exe
 MAIN_OBJ = main.o
 
 # Modules
-SCREENS_OBJ = module/screen_splash.o module/screen_menu.o module/screen_dialogue.o module/screen_gameplay.o
+SCREENS_OBJ = module/screen_splash.o module/screen_menu.o module/screen_dialogue.o module/screen_gameplay.o module/screen_setting.o
 SETTING_OBJ = module/setting.o
 SETTING_LIB = lib/libsetting.a
 CHAR_OBJ = module/character.o

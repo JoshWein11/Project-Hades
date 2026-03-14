@@ -9,6 +9,7 @@ void InitSettings(void)
     currentSettings.screenWidth = 1280;
     currentSettings.screenHeight = 720;
     currentSettings.title = "Game With Settings Module";
+    currentSettings.masterVolume = 1.0f;
 }
 
 const GameSettings* GetSettings(void)
@@ -21,4 +22,12 @@ void ApplyResolution(int width, int height)
     currentSettings.screenWidth = width;
     currentSettings.screenHeight = height;
     SetWindowSize(width, height);
+}
+
+void SetMasterVolumeLevel(float volume)
+{
+    if (volume < 0.0f) volume = 0.0f;
+    if (volume > 1.0f) volume = 1.0f;
+    currentSettings.masterVolume = volume;
+    SetMasterVolume(volume);
 }

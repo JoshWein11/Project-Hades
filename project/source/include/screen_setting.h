@@ -1,0 +1,11 @@
+#ifndef SCREEN_SETTING_H
+#define SCREEN_SETTING_H
+
+#include "screens.h"
+
+void InitScreenSetting(void);
+GameScreen UpdateScreenSetting(GameScreen previousScreen);
+void DrawScreenSetting(void);
+void UnloadScreenSetting(void);
+
+#endif // SCREEN_SETTING_H

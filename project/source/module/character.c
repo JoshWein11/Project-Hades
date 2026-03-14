@@ -31,7 +31,7 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     // Dash Variables Init
     player->isDashing = false;
     player->dashDir = (Vector2){0.0f, 0.0f};
-    player->dashSpeed = 1600.0f; 
+    player->dashSpeed = 1000.0f; 
     player->dashDuration = 0.25f;
     player->dashTime = 0.0f;
     player->dashProgress = 0.0f;

@@ -7,7 +7,10 @@
 #include "screen_menu.h"
 #include "screen_dialogue.h"
 #include "screen_gameplay.h"
+#include "screen_setting.h"
 #include "audio.h"
+
+#include <stdio.h>
 
 int main(void)
 {
@@ -17,6 +20,7 @@ int main(void)
 
     // Use settings for window initialization
     InitWindow(settings->screenWidth, settings->screenHeight, settings->title);
+    SetExitKey(0);  // Disable ESC as the close-window key (we use it for settings)
 
     // Initialize all screens
     InitScreenSplash();
@@ -40,7 +44,7 @@ int main(void)
     while (!WindowShouldClose() && !exitGame && currentScreen != QUIT_GAME)
     {
         // Global Input: Toggle settings menu
-        if (IsKeyPressed(KEY_M)) {
+        if (IsKeyPressed(KEY_ESCAPE)) {
             if (currentScreen == GAMEPLAY || currentScreen == MAIN_MENU) {
                 previousScreen = currentScreen;
                 currentScreen = SETTINGS;
@@ -75,10 +79,7 @@ int main(void)
                 currentScreen = UpdateScreenGameplay(&gameAudio);
                 break;
             case SETTINGS:
-                // Settings logic
-                if (IsKeyPressed(KEY_ONE)) ApplyResolution(800, 600);
-                else if (IsKeyPressed(KEY_TWO)) ApplyResolution(1280, 720);
-                else if (IsKeyPressed(KEY_THREE)) ApplyResolution(1920, 1080);
+                currentScreen = UpdateScreenSetting(previousScreen);
                 break;
             default: break;
         }
@@ -100,17 +101,9 @@ int main(void)
                 case GAMEPLAY:
                     DrawScreenGameplay();
                     break;
-                case SETTINGS: {
-                    // Dim background
-                    DrawRectangle(0, 0, settings->screenWidth, settings->screenHeight, Fade(BLACK, 0.8f));
-                    
-                    int centerX = settings->screenWidth / 2;
-                    DrawText("SETTINGS MENU", centerX - MeasureText("SETTINGS MENU", 40) / 2, 100, 40, RAYWHITE);
-                    DrawText("1. 800x600", centerX - MeasureText("1. 800x600", 20) / 2, 200, 20, RAYWHITE);
-                    DrawText("2. 1280x790", centerX - MeasureText("2. 1280x720", 20) / 2, 250, 20, RAYWHITE);
-                    DrawText("3. 1920x1080", centerX - MeasureText("3. 1920x1080", 20) / 2, 300, 20, RAYWHITE);
-                    DrawText("Press 'M' to return to game", centerX - MeasureText("Press 'M' to return to game", 20) / 2, 400, 20, LIGHTGRAY);
-                } break;
+                case SETTINGS:
+                    DrawScreenSetting();
+                    break;
                 default: break;
             }
 
@@ -122,6 +115,7 @@ int main(void)
     UnloadScreenDialogue();
     UnloadScreenMenu();
     UnloadScreenSplash();
+    UnloadScreenSetting();
 
     UnloadAudio(&gameAudio);
     CloseAudioDevice();
