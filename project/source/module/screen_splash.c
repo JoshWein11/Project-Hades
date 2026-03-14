@@ -8,7 +8,7 @@ static Texture2D splashLogo;
 void InitScreenSplash(void)
 {
     splashFrames = 0;
-    splashLogo = LoadTexture("../assets/images/logo.jpg");
+    splashLogo = LoadTexture("../assets/images/logo.png");
 }
 
 GameScreen UpdateScreenSplash(void)
@@ -31,12 +31,14 @@ void DrawScreenSplash(void)
     
     if (alpha < 0.0f) alpha = 0.0f;
     if (alpha > 1.0f) alpha = 1.0f;
+
+    float scale = 1.5f;
     
     if (splashLogo.id != 0) {
         DrawTextureEx(splashLogo, 
-            (Vector2){ settings->screenWidth / 2.0f - splashLogo.width / 2.0f, 
-                       settings->screenHeight / 2.0f - splashLogo.height / 2.0f },
-            0.0f, 1.0f, Fade(WHITE, alpha));
+            (Vector2){ settings->screenWidth / 2.0f - (splashLogo.width * scale) / 2.0f, 
+                       settings->screenHeight / 2.0f - (splashLogo.height * scale) / 2.0f },
+            0.0f, scale, Fade(WHITE, alpha));
     } else {
         int textWidth = MeasureText("YOUR LOGO HERE", 60);
         DrawText("YOUR LOGO HERE", settings->screenWidth / 2 - textWidth / 2, settings->screenHeight / 2 - 30, 60, Fade(BLACK, alpha));
