@@ -2,9 +2,10 @@
 #define SCREEN_GAMEPLAY_H
 
 #include "screens.h"
+#include "audio.h"
 
 void InitScreenGameplay(void);
-GameScreen UpdateScreenGameplay(void);
+GameScreen UpdateScreenGameplay(Audio* gameAudio);
 void DrawScreenGameplay(void);
 void UnloadScreenGameplay(void);
 

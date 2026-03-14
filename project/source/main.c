@@ -72,7 +72,7 @@ int main(void)
                 currentScreen = UpdateScreenDialogue();
                 break;
             case GAMEPLAY:
-                currentScreen = UpdateScreenGameplay();
+                currentScreen = UpdateScreenGameplay(&gameAudio);
                 break;
             case SETTINGS:
                 // Settings logic

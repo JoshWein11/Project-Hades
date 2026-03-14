@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <math.h>     // For powf, sqrtf
 #include "raymath.h"  // For Vector2 math
+#include <stddef.h>
 
 void InitCharacter(Character* player, int startX, int startY, const char* spritePath, int cols, int rows){
     player->position = (Vector2){ (float)startX, (float)startY };
@@ -50,7 +51,7 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->trailCount = 0;
 }
 
-void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos){
+void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos, Audio* gameAudio){
     bool isMoving = false;
     float dt = GetFrameTime();
 
@@ -218,6 +219,11 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
             // Loop back to start if we exceed the texture's column count
             if (player->currentFrame >= player->frames) player->currentFrame = 0;
 
+            // Trigger footstep every 3 frame
+            if (gameAudio != NULL && (player->currentFrame % 4 == 0)) {
+                PlayRandomFootstep(gameAudio);
+            }
+
             player->frameRec.x = (float)player->currentFrame * player->frameRec.width;
         }
     } 
@@ -226,7 +232,7 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
         player->framesCounter = 0;
         // Optionally rest to a specific idle frame, e.g., currentFrame = 0
         player->currentFrame = 0;
-        player->frameRec.x = 0; // Or leave it alone to stop on current frame: `player->frameRec.x = (float)player->currentFrame * player->frameRec.width;`
+        player->frameRec.x = 0; 
     }
 
     player->frameRec.y = (float)renderRow * player->frameRec.height;

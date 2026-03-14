@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "screen_gameplay.h"
 #include "character.h"
+#include "audio.h"
 #include "weapon.h"
 #include "tiled_map.h"
 #include "setting.h"
@@ -26,7 +27,7 @@ void InitScreenGameplay(void)
     camera.zoom = 2.0f;
 }
 
-GameScreen UpdateScreenGameplay(void)
+GameScreen UpdateScreenGameplay(Audio* gameAudio)
 {
     const GameSettings* settings = GetSettings();
     float dt = GetFrameTime();
@@ -40,7 +41,7 @@ GameScreen UpdateScreenGameplay(void)
     Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
 
     // Update character logic 
-    UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos);
+    UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
     
     // Update bullets
     UpdateWeapon(&playerWeapon, dt, map.collisionRecs, map.collisionCount);

@@ -3,6 +3,7 @@
 
 #include "raylib.h"
 #include <stdbool.h>
+#include "audio.h"
 
 #define MAX_DASH_TRAIL 15
 
@@ -63,7 +64,7 @@ typedef struct {
 void InitCharacter(Character* player, int startX, int startY, const char* spritePath, int cols, int rows);
 
 // Update logic and animations
-void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos);
+void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount, Vector2 mouseWorldPos, Audio* gameAudio);
 
 // Draw the correct frame from the active sprite sheet
 void DrawCharacter(Character* player);
