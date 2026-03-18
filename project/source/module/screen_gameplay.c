@@ -73,7 +73,7 @@ void DrawScreenGameplay(void)
     DrawCharacterHUD(&player, player.sprite);
 
     DrawText("Move with Arrow Keys or WASD!", 10, 10, 20, DARKGRAY);
-    DrawText("Click to Shoot! Press 'M' for Settings | ESC to open Setting", 10, 40, 20, LIGHTGRAY);
+    DrawText("ESC to open Setting", 10, 40, 20, LIGHTGRAY);
 }
 
 void UnloadScreenGameplay(void)

@@ -1,0 +1,14 @@
+bg_opening.jpg
+---
+COMMANDER|commander.png|left
+Welcome to Protocol Hades. Your mission begins now...
+---
+COMMANDER|commander.png|left
+The enemy has breached the outer perimeter. We need to act fast.
+---
+SOLDIER|soldier.png|right
+Understood, Commander. Awaiting orders.
+---
+COMMANDER|commander.png|left
+67 67 67 67 67
+---

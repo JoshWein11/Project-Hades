@@ -27,7 +27,7 @@ int main(void)
     // Initialize all screens
     InitScreenSplash();
     InitScreenMenu();
-    InitScreenDialogue();
+    InitScreenDialogue("../assets/dialogue/opening.txt");
     InitScreenGameplay();
 
     // Initialize Audio
