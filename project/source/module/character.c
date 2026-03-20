@@ -57,6 +57,9 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
 
     // Trail Init
     player->trailCount = 0; // No ghost frames exist yet
+
+    // Damage recovery
+    player->hitInvincibleTimer = 0.0f;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,6 +85,11 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
         if (player->stamina > player->maxStamina) {
             player->stamina = player->maxStamina;
         }
+    }
+
+    // ── Damage Recovery ──────────────────────────────────────────────────────
+    if (player->hitInvincibleTimer > 0.0f) {
+        player->hitInvincibleTimer -= dt;
     }
 
     // ── 2. Dash Activation ──────────────────────────────────────────────────

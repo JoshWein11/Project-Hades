@@ -1,4 +1,4 @@
-#ifndef CHARACTER_H
+#ifndef CHARACTER_H //Code Written By: Josh
 #define CHARACTER_H
 
 #include "raylib.h"
@@ -8,58 +8,61 @@
 // Maximum number of ghost frames stored for the dash trail effect
 #define MAX_DASH_TRAIL 15
 
-// Stores a single snapshot of the player's position and sprite frame for a dash trail ghost
+// Stores the player's position and sprite frame for a dash trail
 typedef struct {
-    Vector2 position;   // World position of this ghost frame
-    Rectangle frameRec; // Sprite frame region to draw for this ghost
+    Vector2 position;   // World position of this trail
+    Rectangle frameRec; // Sprite frame region to draw for this trail
     float alpha;        // Transparency; fades to 0 over time so the trail disappears
 } DashFrame;
 
 // Holds all state for the player character
 typedef struct {
-    Vector2 position;       // World position (top-left of the sprite)
-    Vector2 velocity;       // Current movement velocity (pixels per second)
-    float maxSpeed;         // Maximum movement speed cap
-    float acceleration;     // How quickly the player speeds up when a key is held
-    float friction;         // How quickly the player slows down when no key is held
-    float scale;            // Render scale multiplier applied to the sprite
+    Vector2 position;       
+    Vector2 velocity;      
+    float maxSpeed;         
+    float acceleration;     
+    float friction;         
+    float scale;            
 
-    // Animation Fields
-    Texture2D sprite;       // The walking sprite sheet
-    int frames;             // Number of columns in sprite (animation frames per row)
-    int rows;               // Number of rows in sprite (one row per facing direction)
+    // Character Animation Fields defining sprite sheet layout
+    Texture2D sprite;      
+    int frames;             
+    int rows;               
     
-    Rectangle frameRec;     // The exact sub-rectangle of the sprite sheet to draw this tick
+    Rectangle frameRec;    
     
-    int currentFrame;       // Which column (animation frame) we are currently on
-    int framesCounter;      // Counts elapsed game frames to throttle animation speed
-    int framesSpeed;        // Animation playback speed (frames per second equivalent)
-    int movingDirection;    // Which sprite row to use: 0=Right, 1=Left, 2=Up, 3=Down
+    int currentFrame;      
+    int framesCounter;     
+    int framesSpeed;        
+    int movingDirection;    
 
     // Dash Variables
-    bool isDashing;         // True while a dash is actively in progress
-    Vector2 dashDir;        // Normalized direction the dash is travelling
-    float dashSpeed;        // Peak speed at the start of a dash (pixels per second)
-    float dashDuration;     // Total time (seconds) a dash lasts
-    float dashTime;         // Remaining dash time; counts down to 0
-    float dashProgress;     // 0→1 progress of the dash, used to ease speed out
+    bool isDashing;         
+    Vector2 dashDir;        
+    float dashSpeed;        
+    float dashDuration;     
+    float dashTime;         
+    float dashProgress;     
 
     // Stamina Variables
-    float stamina;          // Current stamina points
-    float maxStamina;       // Maximum stamina the player can hold
-    float staminaRegenRate; // Stamina recovered per second (when not dashing)
-    float dashCost;         // Stamina consumed per dash
+    float stamina;          
+    float maxStamina;       
+    float staminaRegenRate; 
+    float dashCost;         
 
     // Health
-    float health;           // Current health points
-    float maxHealth;        // Maximum health the player can have
+    float health;           
+    float maxHealth;        
 
     // Dash Trail
-    DashFrame trail[MAX_DASH_TRAIL]; // Ring buffer of ghost frames drawn behind the player during a dash
-    int trailCount;                  // How many valid ghost frames are currently in the trail array
+    DashFrame trail[MAX_DASH_TRAIL]; 
+    int trailCount;                  
 
-    // Dash Optional Invincibility
-    bool playerInvincible;  // When true, the player cannot take damage (active during a dash)
+    // Dash Invincibility
+    bool playerInvincible;  
+
+    // Damage recovery
+    float hitInvincibleTimer;
 
 } Character;
 
