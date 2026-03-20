@@ -7,6 +7,7 @@ typedef enum GameScreen {
     DIALOGUE,
     GAMEPLAY,
     SETTINGS,
+    LOAD_GAME,
     QUIT_GAME
 } GameScreen;
 

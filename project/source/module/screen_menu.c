@@ -1,6 +1,7 @@
 #include "raylib.h" //Code written by: Christopher 沈家豪
 #include "screen_menu.h"
 #include "setting.h"
+#include "savedata.h"
 
 static Texture2D menuLogo;
 
@@ -16,15 +17,21 @@ GameScreen UpdateScreenMenu(void)
     float centerX = settings->screenWidth / 2.0f;
     float centerY = settings->screenHeight / 2.0f;
     
-    //Make a Button in the main menu
-    Rectangle startBtn = { centerX - 100, centerY - 10, 200, 50 };
-    Rectangle settingsBtn = { centerX - 100, centerY + 60, 200, 50 };
-    Rectangle quitBtn = { centerX - 100, centerY + 130, 200, 50 };
+    //Make buttons in the main menu
+    Rectangle startBtn    = { centerX - 100, centerY - 10, 200, 50 };
+    Rectangle loadBtn     = { centerX - 100, centerY + 60, 200, 50 };
+    Rectangle settingsBtn = { centerX - 100, centerY + 130, 200, 50 };
+    Rectangle quitBtn     = { centerX - 100, centerY + 200, 200, 50 };
+
+    bool hasSave = SaveFileExists(SAVE_FILEPATH);
 
     //Check if the mouse is clicked
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (CheckCollisionPointRec(mousePoint, startBtn)) {
             return DIALOGUE;
+        } else if (hasSave && CheckCollisionPointRec(mousePoint, loadBtn)) {
+            TraceLog(LOG_INFO, "MENU: Load Game clicked");
+            return LOAD_GAME;
         } else if (CheckCollisionPointRec(mousePoint, settingsBtn)) {
             return SETTINGS;
         } else if (CheckCollisionPointRec(mousePoint, quitBtn)) {
@@ -42,9 +49,12 @@ void DrawScreenMenu(void) //Draw the Screen
     float centerY = settings->screenHeight / 2.0f;
     Vector2 mousePoint = GetMousePosition();
     
-    Rectangle startBtn = { (float)centerX - 100, centerY - 10, 200, 50 };
-    Rectangle settingsBtn = { (float)centerX - 100, centerY + 60, 200, 50 };
-    Rectangle quitBtn = { (float)centerX - 100, centerY + 130, 200, 50 };
+    Rectangle startBtn    = { (float)centerX - 100, centerY - 10, 200, 50 };
+    Rectangle loadBtn     = { (float)centerX - 100, centerY + 60, 200, 50 };
+    Rectangle settingsBtn = { (float)centerX - 100, centerY + 130, 200, 50 };
+    Rectangle quitBtn     = { (float)centerX - 100, centerY + 200, 200, 50 };
+
+    bool hasSave = SaveFileExists(SAVE_FILEPATH);
 
     // Draw menu logo scaled 1.67x, centered
     float logoScale = 1.67f;
@@ -56,6 +66,17 @@ void DrawScreenMenu(void) //Draw the Screen
     DrawRectangleRec(startBtn, CheckCollisionPointRec(mousePoint, startBtn) ? LIGHTGRAY : RAYWHITE);
     DrawRectangleLinesEx(startBtn, 2, DARKGRAY);
     DrawText("START", centerX - MeasureText("START", 20) / 2, (int)(startBtn.y + 15), 20, DARKGRAY);
+
+    // Load Game Button (greyed out if no save exists)
+    if (hasSave) {
+        DrawRectangleRec(loadBtn, CheckCollisionPointRec(mousePoint, loadBtn) ? LIGHTGRAY : RAYWHITE);
+        DrawRectangleLinesEx(loadBtn, 2, DARKGRAY);
+        DrawText("LOAD GAME", centerX - MeasureText("LOAD GAME", 20) / 2, (int)(loadBtn.y + 15), 20, DARKGRAY);
+    } else {
+        DrawRectangleRec(loadBtn, Fade(LIGHTGRAY, 0.4f));
+        DrawRectangleLinesEx(loadBtn, 2, Fade(DARKGRAY, 0.4f));
+        DrawText("LOAD GAME", centerX - MeasureText("LOAD GAME", 20) / 2, (int)(loadBtn.y + 15), 20, Fade(GRAY, 0.5f));
+    }
 
     // Settings Button
     DrawRectangleRec(settingsBtn, CheckCollisionPointRec(mousePoint, settingsBtn) ? LIGHTGRAY : RAYWHITE);

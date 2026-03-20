@@ -179,6 +179,17 @@ void InitScreenDialogue(const char* dialogueFile)
     TraceLog(LOG_INFO, "DIALOGUE: Loaded %d entries (hasBg=%d)", dialogueCount, hasBg);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ResetScreenDialogue — resets dialogue back to entry 0 without reloading files
+// ─────────────────────────────────────────────────────────────────────────────
+void ResetScreenDialogue(void)
+{
+    currentDialogue = 0;
+    if (dialogueCount > 0) {
+        ResetTypewriter();
+    }
+}
+
 GameScreen UpdateScreenDialogue(void)
 {
     if (dialogueCount == 0) return GAMEPLAY;

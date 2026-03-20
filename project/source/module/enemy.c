@@ -9,10 +9,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 
-// Moves the enemy toward 'target' at 'speed' px/s.
+// Moves the enemy toward 'target' at 'speed' px/s with wall collision.
 // Returns true when it arrives (within 4 px).
 // Also updates facingAngleDeg from the movement direction.
-static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt) {
+static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt,
+                       Rectangle* colliders, int colliderCount) {
     Vector2 diff = Vector2Subtract(target, e->position);
     float dist = Vector2Length(diff);
     if (dist < 4.0f) {
@@ -20,7 +21,30 @@ static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt) {
         return true;
     }
     Vector2 dir = Vector2Normalize(diff);
-    e->position = Vector2Add(e->position, Vector2Scale(dir, speed * dt));
+    float dx = dir.x * speed * dt;
+    float dy = dir.y * speed * dt;
+
+    // Enemy hitbox (scaled sprite size)
+    float w = (float)e->frameWidth  * e->scale;
+    float h = (float)e->frameHeight * e->scale;
+
+    // Axis-separated collision (same approach as the player in character.c)
+    // Test X axis
+    Rectangle testX = { e->position.x + dx, e->position.y, w, h };
+    bool blockedX = false;
+    for (int i = 0; i < colliderCount; i++) {
+        if (CheckCollisionRecs(testX, colliders[i])) { blockedX = true; break; }
+    }
+    if (!blockedX) e->position.x += dx;
+
+    // Test Y axis
+    Rectangle testY = { e->position.x, e->position.y + dy, w, h };
+    bool blockedY = false;
+    for (int i = 0; i < colliderCount; i++) {
+        if (CheckCollisionRecs(testY, colliders[i])) { blockedY = true; break; }
+    }
+    if (!blockedY) e->position.y += dy;
+
     // Track heading so the vision cone faces the direction of travel
     e->facingAngleDeg = atan2f(dir.y, dir.x) * RAD2DEG;
     return false;
@@ -102,10 +126,11 @@ static void ResetAnim(EnemyAnimState* a) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vision cone — returns true when the player is within range AND inside
-// the angle cone centered on the enemy's current heading.
+// Vision cone — returns true when the player is within range, inside the
+// angle cone, AND no wall blocks the line of sight.
 // ─────────────────────────────────────────────────────────────────────────────
-static bool CanSeePlayer(const Enemy* e, Vector2 playerPos) {
+static bool CanSeePlayer(const Enemy* e, Vector2 playerPos,
+                         Rectangle* colliders, int colliderCount) {
     Vector2 centre = EnemyCentre((Enemy*)e);
     float dist = Vector2Distance(centre, playerPos);
     if (dist > e->visionRange) return false;
@@ -119,7 +144,22 @@ static bool CanSeePlayer(const Enemy* e, Vector2 playerPos) {
     while (diff >  180.0f) diff -= 360.0f;
     while (diff < -180.0f) diff += 360.0f;
 
-    return fabsf(diff) <= e->visionAngle;
+    if (fabsf(diff) > e->visionAngle) return false;
+
+    // Raycast: step along the line from enemy to player, checking for walls
+    float stepSize = 8.0f; // Check every 8 pixels
+    int steps = (int)(dist / stepSize);
+    Vector2 stepDir = Vector2Normalize(toPlayer);
+    for (int i = 1; i <= steps; i++) {
+        Vector2 point = Vector2Add(centre, Vector2Scale(stepDir, stepSize * (float)i));
+        for (int c = 0; c < colliderCount; c++) {
+            if (CheckCollisionPointRec(point, colliders[c])) {
+                return false; // Wall blocks line of sight
+            }
+        }
+    }
+
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,8 +190,8 @@ void InitEnemy(Enemy*       e,
     e->patrolDir     = 1;
 
     // ── Vision cone ───────────────────────────────────────────────────────────
-    e->visionRange    = 180.0f;  // ~5.5 tiles
-    e->visionAngle    = 70.0f;   // 140° total cone
+    e->visionRange    = 300.0f; 
+    e->visionAngle    = 40.0f;
     e->loseRange      = 280.0f;
     e->facingAngleDeg = 0.0f;
 
@@ -224,7 +264,8 @@ void DamageEnemy(Enemy* e, float damage, Vector2 knockbackDir, float knockbackFo
 // ─────────────────────────────────────────────────────────────────────────────
 // UpdateEnemy
 // ─────────────────────────────────────────────────────────────────────────────
-void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake) {
+void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
+                 Rectangle* colliders, int colliderCount) {
     if (outShake) *outShake = false;
 
     // ── Tick-down timers that run even while paused ────────────────────────────
@@ -266,14 +307,14 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake) {
         TickClip(e, &e->clipHit, &e->animHit, FacingRow(e), dt);
         if (e->hitStateTimer <= 0.0f) {
             // Recover: if player still visible, resume chase; otherwise patrol
-            e->state = CanSeePlayer(e, playerPos) ? ENEMY_CHASE : ENEMY_PATROL;
+            e->state = CanSeePlayer(e, playerPos, colliders, colliderCount) ? ENEMY_CHASE : ENEMY_PATROL;
         }
         return;
     }
 
     Vector2 centre = EnemyCentre(e);
     float distToPlayer = Vector2Distance(centre, playerPos);
-    bool playerVisible = CanSeePlayer(e, playerPos);
+    bool playerVisible = CanSeePlayer(e, playerPos, colliders, colliderCount);
 
     // ── FSM Transitions ───────────────────────────────────────────────────────
     switch (e->state) {
@@ -292,9 +333,18 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake) {
     switch (e->state) {
 
         case ENEMY_PATROL: {
+            // If waiting at waypoint, count down before resuming
+            if (e->waitTimer > 0.0f) {
+                e->waitTimer -= dt;
+                TickClip(e, &e->clipIdle, &e->animIdle, dirRow, dt);
+                break;
+            }
+
             // Ping-pong between waypoints
             Vector2 target = e->waypoints[e->waypointIndex];
-            if (MoveToward(e, target, e->patrolSpeed, dt)) {
+            if (MoveToward(e, target, e->patrolSpeed, dt, colliders, colliderCount)) {
+                // Arrived at waypoint — pause 2 seconds before turning
+                e->waitTimer = 2.0f;
                 e->waypointIndex += e->patrolDir;
                 if (e->waypointIndex >= e->waypointCount) {
                     e->waypointIndex = e->waypointCount - 2; // Bounce back
@@ -311,7 +361,7 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake) {
         }
 
         case ENEMY_CHASE:
-            MoveToward(e, playerPos, e->chaseSpeed, dt);
+            MoveToward(e, playerPos, e->chaseSpeed, dt, colliders, colliderCount);
             TickClip(e, &e->clipChase, &e->animChase, dirRow, dt);
             break;
 
@@ -356,22 +406,35 @@ void DrawEnemy(Enemy* e) {
     }
 
     // ── Vision cone (helpful during development, comment out for release) ──────
-    /*
     if (e->state != ENEMY_DEAD) {
         Vector2 centre = EnemyCentre(e);
-        float a1 = (e->facingAngleDeg - e->visionAngle) * DEG2RAD;
-        float a2 = (e->facingAngleDeg + e->visionAngle) * DEG2RAD;
-        Vector2 v1 = { centre.x + cosf(a1) * e->visionRange,
-                       centre.y + sinf(a1) * e->visionRange };
-        Vector2 v2 = { centre.x + cosf(a2) * e->visionRange,
-                       centre.y + sinf(a2) * e->visionRange };
-        Color coneColor = (e->state == ENEMY_CHASE) ? Fade(ORANGE, 0.20f)
-                                                     : Fade(YELLOW, 0.12f);
-        DrawTriangle(centre, v1, v2, coneColor);
-        DrawLineV(centre, v1, Fade(YELLOW, 0.4f));
-        DrawLineV(centre, v2, Fade(YELLOW, 0.4f));
+        float startAngle = (e->facingAngleDeg - e->visionAngle) * DEG2RAD;
+        float endAngle   = (e->facingAngleDeg + e->visionAngle) * DEG2RAD;
+        Color coneColor  = (e->state == ENEMY_CHASE) ? Fade(ORANGE, 0.20f)
+                                                      : Fade(YELLOW, 0.12f);
+        Color edgeColor  = Fade(YELLOW, 0.4f);
+
+        // Draw filled arc as a triangle fan (20 slices for a smooth curve)
+        int segments = 20;
+        float step = (endAngle - startAngle) / (float)segments;
+        for (int i = 0; i < segments; i++) {
+            float a1 = startAngle + step * (float)i;
+            float a2 = startAngle + step * (float)(i + 1);
+            Vector2 p1 = { centre.x + cosf(a1) * e->visionRange,
+                           centre.y + sinf(a1) * e->visionRange };
+            Vector2 p2 = { centre.x + cosf(a2) * e->visionRange,
+                           centre.y + sinf(a2) * e->visionRange };
+            DrawTriangle(centre, p2, p1, coneColor);
+        }
+
+        // Edge lines along the two sides of the cone
+        Vector2 v1 = { centre.x + cosf(startAngle) * e->visionRange,
+                       centre.y + sinf(startAngle) * e->visionRange };
+        Vector2 v2 = { centre.x + cosf(endAngle)   * e->visionRange,
+                       centre.y + sinf(endAngle)   * e->visionRange };
+        DrawLineV(centre, v1, edgeColor);
+        DrawLineV(centre, v2, edgeColor);
     }
-    */
 
     // ── Health bar (hidden when full or dead) ─────────────────────────────────
     if (e->state != ENEMY_DEAD && e->health < e->maxHealth) {

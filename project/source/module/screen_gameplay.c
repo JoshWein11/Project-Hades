@@ -132,7 +132,8 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     // ── Enemies ───────────────────────────────────────────────────────────────
     for (int i = 0; i < enemyCount; i++) {
         bool shakeThisFrame = false;
-        UpdateEnemy(&enemies[i], playerCentre, dt, &shakeThisFrame);
+        UpdateEnemy(&enemies[i], playerCentre, dt, &shakeThisFrame,
+                    map.collisionRecs, map.collisionCount);
         if (shakeThisFrame) TriggerShake(5.0f, 0.15f);
 
         if (enemies[i].state != ENEMY_DEAD) {
@@ -226,4 +227,44 @@ void UnloadScreenGameplay(void)
     UnloadTiledMap(&map);
     UnloadCharacter(&player);
     for (int i = 0; i < enemyCount; i++) UnloadEnemy(&enemies[i]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GetGameplaySaveData — snapshot the live game state into a SaveData struct
+// ─────────────────────────────────────────────────────────────────────────────
+void GetGameplaySaveData(SaveData* data)
+{
+    data->playerX       = player.position.x;
+    data->playerY       = player.position.y;
+    data->playerHealth  = player.health;
+    data->playerStamina = player.stamina;
+
+    data->enemyCount = enemyCount;
+    for (int i = 0; i < enemyCount && i < SAVE_MAX_ENEMIES; i++) {
+        data->enemyX[i]      = enemies[i].position.x;
+        data->enemyY[i]      = enemies[i].position.y;
+        data->enemyHealth[i] = enemies[i].health;
+        data->enemyDead[i]   = (enemies[i].state == ENEMY_DEAD);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RestoreGameplayFromSave — write SaveData values back into the live structs
+// ─────────────────────────────────────────────────────────────────────────────
+void RestoreGameplayFromSave(const SaveData* data)
+{
+    player.position.x = data->playerX;
+    player.position.y = data->playerY;
+    player.health     = data->playerHealth;
+    player.stamina    = data->playerStamina;
+
+    for (int i = 0; i < data->enemyCount && i < enemyCount; i++) {
+        enemies[i].position.x = data->enemyX[i];
+        enemies[i].position.y = data->enemyY[i];
+        enemies[i].health     = data->enemyHealth[i];
+        if (data->enemyDead[i]) {
+            enemies[i].state  = ENEMY_DEAD;
+            enemies[i].health = 0.0f;
+        }
+    }
 }

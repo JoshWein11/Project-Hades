@@ -15,6 +15,7 @@ typedef struct {
 } DialogueEntry;
 
 void InitScreenDialogue(const char* dialogueFile);
+void ResetScreenDialogue(void);
 GameScreen UpdateScreenDialogue(void);
 void DrawScreenDialogue(void);
 void UnloadScreenDialogue(void);

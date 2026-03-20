@@ -93,6 +93,7 @@ typedef struct {
     // ── FSM ───────────────────────────────────────────────────────────────────
     EnemyState state;
     float      hitStateTimer;    // How long to stay in HIT state
+    float      waitTimer;        // Counts down at waypoint before resuming patrol
 
     // ── Sprite / animation ────────────────────────────────────────────────────
     Texture2D      sprite;       // Shared sprite sheet for all clips
@@ -151,11 +152,14 @@ void InitEnemy(Enemy*      e,
                float       scale);
 
 // Updates FSM, movement, vision cone, animations, particles, and timers.
-//   playerPos   : Centre of the player character in world space.
-//   dt          : Delta time (use GetFrameTime()).
-//   outShake    : Written to true for one frame when the player lands a hit
-//                 that warrants a screen shake — read this in screen_gameplay.c.
-void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake);
+//   playerPos      : Centre of the player character in world space.
+//   dt             : Delta time (use GetFrameTime()).
+//   outShake       : Written to true for one frame when the player lands a hit
+//                    that warrants a screen shake — read this in screen_gameplay.c.
+//   colliders      : Array of wall collision rectangles (from MapData).
+//   colliderCount  : Number of entries in colliders.
+void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
+                 Rectangle* colliders, int colliderCount);
 
 // Draws the enemy sprite (or placeholder), health bar, vision cone (debug), and particles.
 void DrawEnemy(Enemy* e);
