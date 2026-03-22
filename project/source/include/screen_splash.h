@@ -1,4 +1,4 @@
-#ifndef SCREEN_SPLASH_H //All Screen Code Written By: Christopher 沈家豪
+#ifndef SCREEN_SPLASH_H //All Screen Code Written By: Christopher 沈佳豪
 #define SCREEN_SPLASH_H
 
 #include "screens.h"

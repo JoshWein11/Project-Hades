@@ -2138,6 +2138,12 @@ cute_tiled_object_t* cute_tiled_read_object(cute_tiled_map_internal_t* m)
 			cute_tiled_intern_string(m, &object->type);
 			break;
 
+		case 11746902372727406098U: // opacity
+		{
+			float dummy_opacity;
+			cute_tiled_read_float(m, &dummy_opacity);
+		}	break;
+
 		default:
 			CUTE_TILED_CHECK(0, "Unknown identifier found.");
 		}

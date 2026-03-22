@@ -1,4 +1,4 @@
-#ifndef SCREEN_DIALOGUE_H //All Screen Code Written By: Christopher 沈家豪
+#ifndef SCREEN_DIALOGUE_H //All Screen Code Written By: Christopher 沈佳豪
 #define SCREEN_DIALOGUE_H
 
 #include "screens.h"

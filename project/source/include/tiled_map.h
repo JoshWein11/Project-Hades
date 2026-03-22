@@ -1,4 +1,4 @@
-#ifndef TILED_MAP_H //Code Written By: Christopher 沈家豪
+#ifndef TILED_MAP_H //Code Written By: Christopher 沈佳豪
 #define TILED_MAP_H
 
 #include "raylib.h"
@@ -8,8 +8,11 @@
 
 typedef struct {
     cute_tiled_map_t* map;
-    Texture2D tileset2;
-    Texture2D fieldsTileset;
+    Texture2D tilesetx1;
+    Texture2D labtileset;
+    Texture2D tube;
+    Texture2D spritesheet;
+    Texture2D SciFi;
     
     Rectangle collisionRecs[MAX_COLLISION_RECS];
     int collisionCount;

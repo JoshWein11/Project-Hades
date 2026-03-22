@@ -42,6 +42,12 @@ int main(void)
     GameScreen previousScreen = MAIN_MENU;
     bool exitGame = false;
     bool splashSoundPlayed = false;
+
+    // ── Virtual resolution render target ──────────────────────────────────────
+    // Everything renders to this texture at a fixed size, then it gets scaled
+    // to fit the actual window. This keeps the game looking the same at any res.
+    RenderTexture2D target = LoadRenderTexture(VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+    SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
     
     SetTargetFPS(60);
 
@@ -49,25 +55,21 @@ int main(void)
     while (!WindowShouldClose() && !exitGame && currentScreen != QUIT_GAME)
     {
         // Global Input: Toggle settings menu
+        bool skipUpdateDueToEsc = false;
         if (IsKeyPressed(KEY_ESCAPE)) {
-            if (currentScreen == GAMEPLAY || currentScreen == MAIN_MENU) {
-                // Auto-save when leaving gameplay
-                if (currentScreen == GAMEPLAY) {
-                    SaveData save = {0};
-                    GetGameplaySaveData(&save);
-                    save.currentScreen    = (int)GAMEPLAY;
-                    save.dialogueFinished = true;
-                    SaveGame(&save, SAVE_FILEPATH);
-                }
+            if (currentScreen == MAIN_MENU) {
                 previousScreen = currentScreen;
                 currentScreen = SETTINGS;
+                skipUpdateDueToEsc = true;
             } else if (currentScreen == SETTINGS) {
                 currentScreen = previousScreen;
+                skipUpdateDueToEsc = true;
             }
         }
 
         // --- UPDATE ---
-        switch (currentScreen) {
+        if (!skipUpdateDueToEsc) {
+            switch (currentScreen) {
             case SPLASH:
                 if (!splashSoundPlayed) {
                     PlaySound(gameAudio.sfxSplash);
@@ -93,9 +95,21 @@ int main(void)
             case DIALOGUE:
                 currentScreen = UpdateScreenDialogue();
                 break;
-            case GAMEPLAY:
-                currentScreen = UpdateScreenGameplay(&gameAudio);
+            case GAMEPLAY: {
+                GameScreen next = UpdateScreenGameplay(&gameAudio);
+                if (next == SETTINGS) {
+                    previousScreen = GAMEPLAY;
+                } else if (next == MAIN_MENU) {
+                    // Auto-save when manually returning to menu
+                    SaveData save = {0};
+                    GetGameplaySaveData(&save);
+                    save.currentScreen    = (int)GAMEPLAY;
+                    save.dialogueFinished = true;
+                    SaveGame(&save, SAVE_FILEPATH);
+                }
+                currentScreen = next;
                 break;
+            }
             case SETTINGS: {
                 GameScreen settingsResult = UpdateScreenSetting(previousScreen);
                 // If settings "Back" goes to main menu and we came from gameplay,
@@ -127,9 +141,11 @@ int main(void)
             }
             default: break;
         }
+        }
 
         // --- DRAW ---
-        BeginDrawing();
+        // Draw everything to the virtual-resolution render texture
+        BeginTextureMode(target);
             ClearBackground(RAYWHITE);
 
             switch (currentScreen) {
@@ -151,6 +167,25 @@ int main(void)
                 default: break;
             }
 
+        EndTextureMode();
+
+        // Scale the virtual canvas to fit the actual window (letterboxed)
+        BeginDrawing();
+            ClearBackground(BLACK);
+
+            float scaleX = (float)settings->screenWidth  / (float)VIRTUAL_WIDTH;
+            float scaleY = (float)settings->screenHeight / (float)VIRTUAL_HEIGHT;
+            float scale  = (scaleX < scaleY) ? scaleX : scaleY;
+
+            float drawW = VIRTUAL_WIDTH  * scale;
+            float drawH = VIRTUAL_HEIGHT * scale;
+            float offsetX = (settings->screenWidth  - drawW) * 0.5f;
+            float offsetY = (settings->screenHeight - drawH) * 0.5f;
+
+            // RenderTexture Y is flipped, so source height is negative
+            Rectangle src  = { 0, 0, (float)target.texture.width, -(float)target.texture.height };
+            Rectangle dest = { offsetX, offsetY, drawW, drawH };
+            DrawTexturePro(target.texture, src, dest, (Vector2){0,0}, 0.0f, WHITE);
         EndDrawing();
     }
 
@@ -165,6 +200,7 @@ int main(void)
     }
 
     // --- DE-INITIALIZATION ---
+    UnloadRenderTexture(target);
     UnloadScreenGameplay();
     UnloadScreenDialogue();
     UnloadScreenMenu();

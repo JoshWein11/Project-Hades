@@ -1,4 +1,4 @@
-#ifndef SCREENS_H //All Screen Code Written By: Christopher 沈家豪
+#ifndef SCREENS_H //All Screen Code Written By: Christopher 沈佳豪
 #define SCREENS_H
 
 typedef enum GameScreen {

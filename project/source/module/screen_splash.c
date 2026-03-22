@@ -1,4 +1,4 @@
-#include "raylib.h" //Code written by: Christopher 沈家豪
+#include "raylib.h" //Code written by: Christopher 沈佳豪
 #include "screen_splash.h"
 #include "setting.h"
 
@@ -23,7 +23,6 @@ GameScreen UpdateScreenSplash(void)
 
 void DrawScreenSplash(void)
 {
-    const GameSettings* settings = GetSettings();
     float alpha = 1.0f;
     
     // Calculate alpha for fade in / fade out
@@ -37,13 +36,13 @@ void DrawScreenSplash(void)
     
     if (splashLogo.id != 0) {
         DrawTextureEx(splashLogo, 
-            (Vector2){ settings->screenWidth / 2.0f - (splashLogo.width * scale) / 2.0f, 
-                       settings->screenHeight / 2.0f - (splashLogo.height * scale) / 2.0f },
+            (Vector2){ VIRTUAL_WIDTH / 2.0f - (splashLogo.width * scale) / 2.0f, 
+                       VIRTUAL_HEIGHT / 2.0f - (splashLogo.height * scale) / 2.0f },
             0.0f, scale, Fade(WHITE, alpha));
     } else {
         //Draw Text if no Logo incase the logo is not loaded
         int textWidth = MeasureText("YOUR LOGO HERE", 60);
-        DrawText("YOUR LOGO HERE", settings->screenWidth / 2 - textWidth / 2, settings->screenHeight / 2 - 30, 60, Fade(BLACK, alpha));
+        DrawText("YOUR LOGO HERE", VIRTUAL_WIDTH / 2 - textWidth / 2, VIRTUAL_HEIGHT / 2 - 30, 60, Fade(BLACK, alpha));
     }
 }
 

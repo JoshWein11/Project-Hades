@@ -1,4 +1,4 @@
-#define CUTE_TILED_IMPLEMENTATION //Code written by: Christopher 沈家豪
+#define CUTE_TILED_IMPLEMENTATION //Code written by: Christopher 沈佳豪
 #include "tiled_map.h"
 #include <stdio.h>
 #include <string.h>
@@ -6,8 +6,11 @@
 //Load Tiled Map from JSON file and Texture from Assets
 void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->map = cute_tiled_load_map_from_file(jsonPath, NULL);
-    mapData->fieldsTileset = LoadTexture("../assets/images/FieldsTileset.png");
-    mapData->tileset2 = LoadTexture("../assets/images/Tileset2.png");
+    mapData->tilesetx1 = LoadTexture("../assets/images/tilesetx1.png");
+    mapData->labtileset = LoadTexture("../assets/images/labtileset.png");
+    mapData->tube = LoadTexture("../assets/images/tube.png");
+    mapData->spritesheet = LoadTexture("../assets/images/spritesheet.png");
+    mapData->SciFi = LoadTexture("../assets/images/SciFi.png");
     mapData->collisionCount = 0;
 
     if (mapData->map) {
@@ -52,12 +55,21 @@ void DrawTiledMap(MapData* mapData) {
                     
                     Texture2D tex = {0};
                     int firstgid = 0;
-                    if (gid >= 107) { //Determine which tileset to use
-                        tex = mapData->tileset2;
-                        firstgid = 107;
-                    } else if (gid >= 43) {
-                        tex = mapData->fieldsTileset;
-                        firstgid = 43;
+                    if (gid >= 2362) { //Determine which tileset to use
+                        tex = mapData->spritesheet;
+                        firstgid = 2362;
+                    } else if (gid >= 1786) {
+                        tex = mapData->SciFi;
+                        firstgid = 1786;
+                    } else if (gid >= 1784) {
+                        tex = mapData->tube;
+                        firstgid = 1784;
+                    } else if (gid >= 1703) {
+                        tex = mapData->labtileset;
+                        firstgid = 1703;
+                    } else if (gid >= 1) {
+                        tex = mapData->tilesetx1;
+                        firstgid = 1;
                     } else {
                         //Ignore missing texture
                         continue;
@@ -88,6 +100,9 @@ void UnloadTiledMap(MapData* mapData) { //Unload Tiled Map
         cute_tiled_free_map(mapData->map); 
         mapData->map = NULL; 
     }
-    UnloadTexture(mapData->fieldsTileset);
-    UnloadTexture(mapData->tileset2);
+    UnloadTexture(mapData->tilesetx1);
+    UnloadTexture(mapData->labtileset);
+    UnloadTexture(mapData->tube);
+    UnloadTexture(mapData->spritesheet);
+    UnloadTexture(mapData->SciFi);
 }

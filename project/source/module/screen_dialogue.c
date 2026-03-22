@@ -1,4 +1,4 @@
-#include "raylib.h" //Code written by: Christopher 沈家豪
+#include "raylib.h" //Code written by: Christopher 沈佳豪
 #include "screen_dialogue.h"
 #include "setting.h"
 #include <string.h>
@@ -231,19 +231,17 @@ GameScreen UpdateScreenDialogue(void)
 
 void DrawScreenDialogue(void)
 {
-    const GameSettings* settings = GetSettings();
-    
     if (hasBg) {
         // Draw background image scaled to fill screen
-        float scaleX = (float)settings->screenWidth / (float)bgTexture.width;
-        float scaleY = (float)settings->screenHeight / (float)bgTexture.height;
+        float scaleX = (float)VIRTUAL_WIDTH / (float)bgTexture.width;
+        float scaleY = (float)VIRTUAL_HEIGHT / (float)bgTexture.height;
         float scale = (scaleX > scaleY) ? scaleX : scaleY;
         DrawTextureEx(bgTexture, (Vector2){0, 0}, 0.0f, scale, WHITE);
         // Slight dim on top for readability
-        DrawRectangle(0, 0, settings->screenWidth, settings->screenHeight, Fade(BLACK, 0.3f));
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.3f));
     } else {
         // No bg image: just dim overlay over whatever is behind (gameplay)
-        DrawRectangle(0, 0, settings->screenWidth, settings->screenHeight, Fade(BLACK, 0.5f));
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.5f));
     }
 
     if (dialogueCount == 0) return;
@@ -255,11 +253,11 @@ void DrawScreenDialogue(void)
         float portraitScale = 200.0f / (float)portrait.width;
         float portraitW = portrait.width * portraitScale;
         float portraitH = portrait.height * portraitScale;
-        float portraitY = settings->screenHeight - portraitH - 200;
+        float portraitY = VIRTUAL_HEIGHT - portraitH - 200;
 
         if (dialogues[currentDialogue].isRight) {
             // Draw on the right side
-            float portraitX = settings->screenWidth - portraitW - 40;
+            float portraitX = VIRTUAL_WIDTH - portraitW - 40;
             DrawTextureEx(portrait, (Vector2){portraitX, portraitY}, 0.0f, portraitScale, WHITE);
         } else {
             // Draw on the left side
@@ -271,7 +269,7 @@ void DrawScreenDialogue(void)
     // Dialogue Box properties
     int boxMargin = 40;
     int boxHeight = 150;
-    Rectangle dialogBox = { boxMargin, settings->screenHeight - boxHeight - boxMargin, settings->screenWidth - (boxMargin * 2), boxHeight };
+    Rectangle dialogBox = { boxMargin, VIRTUAL_HEIGHT - boxHeight - boxMargin, VIRTUAL_WIDTH - (boxMargin * 2), boxHeight };
     
     // Name Box properties
     Rectangle nameBox = { boxMargin, dialogBox.y - 40, 200, 40 };

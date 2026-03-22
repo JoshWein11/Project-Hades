@@ -1,4 +1,5 @@
 #include "character.h"
+#include "setting.h"
 #include <stdbool.h>
 #include <math.h>     // For powf, sqrtf
 #include "raymath.h"  // For Vector2 math
@@ -15,10 +16,10 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->velocity = (Vector2){ 0.0f, 0.0f };  // Start with no movement
 
     // Movement tuning values
-    player->maxSpeed     = 300.0f;   // Pixels per second cap
-    player->acceleration = 2000.0f;  // How snappily the player reaches max speed
-    player->friction     = 1400.0f;  // How quickly the player stops when no key is held
-    player->scale        = 1.5f;     // Scale sprite up 1.5× from its native 32×32 size
+    player->maxSpeed     = 200.0f;   // Pixels per second cap
+    player->acceleration = 1000.0f;  // How snappily the player reaches max speed
+    player->friction     = 1000.0f;  // How quickly the player stops when no key is held
+    player->scale        = 1.2f;     // Scale sprite up 1.5× from its native 32×32 size
 
     // Load sprite sheet from disk and store the column / row counts
     player->sprite = LoadTexture(spritePath);
@@ -33,7 +34,7 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
 
     player->currentFrame   = 0;  // Begin on the first animation frame
     player->framesCounter  = 0;  // No elapsed ticks yet
-    player->framesSpeed    = 8;  // Advance one animation frame every 60/8 = 7-8 game frames
+    player->framesSpeed    = 6;  // Advance one animation frame every 60/8 = 7-8 game frames
     player->movingDirection = 0; // Default facing: right (row 0)
 
     // Dash Variables Init
@@ -231,10 +232,10 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
     float scaledWidth  = player->frameRec.width  * player->scale;
     float scaledHeight = player->frameRec.height * player->scale;
 
-    // Use a slightly smaller hitbox (85% of sprite size) so the player can
+    // Use a slightly smaller hitbox (67% of sprite size) so the player can
     // squeeze past corners more comfortably; anchored to the bottom-centre of the sprite
-    float hitboxWidth   = scaledWidth  * 0.85f;
-    float hitboxHeight  = scaledHeight * 0.85f;
+    float hitboxWidth   = scaledWidth  * 0.67f;
+    float hitboxHeight  = scaledHeight * 0.67f;
     float hitboxOffsetX = (scaledWidth  - hitboxWidth)  / 2.0f; // Centre horizontally
     float hitboxOffsetY =  scaledHeight - hitboxHeight;          // Anchor to bottom half
 
@@ -266,8 +267,8 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
             // Loop animation back to the first frame after the last column
             if (player->currentFrame >= player->frames) player->currentFrame = 0;
 
-            // Play a footstep sound every 4th animation frame to sync with the walk cycle
-            if (gameAudio != NULL && (player->currentFrame % 4 == 0)) {
+            // Play a footstep sound every 2th animation frame to sync with the walk cycle
+            if (gameAudio != NULL && (player->currentFrame % 2 == 0)) {
                 PlayRandomFootstep(gameAudio);
             }
 
@@ -353,7 +354,7 @@ void DrawCharacter(Character* player){
 //     - Health bar: colour-coded bar next to the portrait
 // ─────────────────────────────────────────────────────────────────────────────
 void DrawCharacterHUD(Character* player, Texture2D portrait) {
-    int screenH = GetScreenHeight(); // Used to anchor the HUD to the bottom of the screen
+    int screenH = VIRTUAL_HEIGHT; // Anchor HUD to the virtual canvas height
 
     // ── Portrait Layout ──────────────────────────────────────────────────────
     int portraitSize = 60;                                  // Portrait box is 60×60 px

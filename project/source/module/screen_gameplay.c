@@ -1,4 +1,4 @@
-#include "raylib.h" //Code written by: Christopher 沈家豪
+#include "raylib.h" //Code written by: Christopher 沈佳豪
 #include "raymath.h"
 #include "screen_gameplay.h"
 #include "character.h"
@@ -7,11 +7,14 @@
 #include "tiled_map.h"
 #include "setting.h"
 #include "enemy.h"
+#include "savedata.h"
 
 static Character player;
 static MapData   map;
 static Weapon    playerWeapon;
 static Camera2D  camera = { 0 };
+
+static bool isPaused = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy list — increase capacity and call InitEnemy multiple times to add more.
@@ -44,23 +47,21 @@ static void TriggerShake(float magnitude, float duration) {
 // ─────────────────────────────────────────────────────────────────────────────
 void InitScreenGameplay(void)
 {
-    const GameSettings* settings = GetSettings();
-
     // ── Player ────────────────────────────────────────────────────────────────
     InitCharacter(&player,
-                  settings->screenWidth  / 2,
-                  settings->screenHeight / 2,
-                  "../assets/character/Adrian_Walk.png", 16, 2);
+                  600,
+                  815,
+                  "../assets/character/Adrian_Walk.png", 6, 2);
 
     // ── Map ───────────────────────────────────────────────────────────────────
-    LoadTiledMap(&map, "../assets/map/level1.json");
+    LoadTiledMap(&map, "../assets/map/trial.json");
 
     // ── Weapon ────────────────────────────────────────────────────────────────
     InitWeapon(&playerWeapon);
 
     // ── Camera ────────────────────────────────────────────────────────────────
     camera.target   = player.position;
-    camera.offset   = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
+    camera.offset   = (Vector2){ VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f };
     camera.rotation = 0.0f;
     camera.zoom     = 2.0f;
 
@@ -74,6 +75,7 @@ void InitScreenGameplay(void)
     // and supply the correct frameWidth / frameHeight / scale.
 
     enemyCount = 0;
+    isPaused = false;
 
     // Helper macro to easily spawn an enemy that patrols between two points
     #define SPAWN_BASIC_ENEMY(x1, y1, x2, y2) \
@@ -83,24 +85,6 @@ void InitScreenGameplay(void)
                 InitEnemy(&enemies[enemyCount++], pts[0], pts, 2, NULL, 32, 32, 1.5f); \
             } \
         } while(0)
-
-    float cx = (float)(settings->screenWidth  / 2);
-    float cy = (float)(settings->screenHeight / 2);
-
-    // ── Place your enemies here! ─────────────────────────────────────────────
-    
-    // 1. Horizontal patrol right of spawn
-    SPAWN_BASIC_ENEMY(cx + 200, cy, cx + 400, cy);
-    
-    // 2. Vertical patrol right of spawn
-    SPAWN_BASIC_ENEMY(cx + 300, cy - 150, cx + 300, cy + 150);
-
-    // 3. Horizontal patrol top left
-    SPAWN_BASIC_ENEMY(cx - 300, cy - 200, cx - 100, cy - 200);
-
-    // 4. Diagonal patrol bottom right
-    SPAWN_BASIC_ENEMY(cx + 150, cy + 300, cx + 350, cy + 150);
-
     #undef SPAWN_BASIC_ENEMY
 }
 
@@ -109,17 +93,48 @@ void InitScreenGameplay(void)
 // ─────────────────────────────────────────────────────────────────────────────
 GameScreen UpdateScreenGameplay(Audio* gameAudio)
 {
-    const GameSettings* settings = GetSettings();
     float dt = GetFrameTime();
 
+    // ── Pause Handle ──────────────────────────────────────────────────────────
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        isPaused = !isPaused;
+    }
+
+    if (isPaused) {
+        Vector2 mousePoint = GetVirtualMouse();
+        float centerX = VIRTUAL_WIDTH / 2.0f;
+        float centerY = VIRTUAL_HEIGHT / 2.0f;
+        
+        Rectangle saveBtn     = { centerX - 100, centerY - 80, 200, 50 };
+        Rectangle settingsBtn = { centerX - 100, centerY - 10, 200, 50 };
+        Rectangle exitBtn     = { centerX - 100, centerY + 60, 200, 50 };
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (CheckCollisionPointRec(mousePoint, saveBtn)) {
+                SaveData save = {0};
+                GetGameplaySaveData(&save);
+                save.currentScreen    = (int)GAMEPLAY;
+                save.dialogueFinished = true;
+                SaveGame(&save, SAVE_FILEPATH);
+                isPaused = false; // Unpause after saving
+            } else if (CheckCollisionPointRec(mousePoint, settingsBtn)) {
+                return SETTINGS;
+            } else if (CheckCollisionPointRec(mousePoint, exitBtn)) {
+                isPaused = false; // Reset pause state when exiting
+                return MAIN_MENU;
+            }
+        }
+        return GAMEPLAY; // Skip logic updates
+    }
+
     // ── Camera offset (shake applied later in Draw) ───────────────────────────
-    camera.offset = (Vector2){ settings->screenWidth / 2.0f, settings->screenHeight / 2.0f };
+    camera.offset = (Vector2){ VIRTUAL_WIDTH / 2.0f, VIRTUAL_HEIGHT / 2.0f };
     camera.target = (Vector2){
         player.position.x + (player.frameRec.width  * player.scale) / 2.0f,
         player.position.y + (player.frameRec.height * player.scale) / 2.0f
     };
 
-    Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
+    Vector2 mouseWorldPos = GetScreenToWorld2D(GetVirtualMouse(), camera);
 
     // ── Player ────────────────────────────────────────────────────────────────
     UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
@@ -215,8 +230,36 @@ void DrawScreenGameplay(void)
 
     // ── HUD (screen-space, no camera transform) ───────────────────────────────
     DrawCharacterHUD(&player, player.sprite);
-    DrawText("WASD / Arrows: Move  |  LMB: Shoot  |  ESC: Settings",
+    DrawText("WASD / Arrows: Move  |  LMB: Shoot  |  ESC: Pause",
              10, 10, 14, DARKGRAY);
+
+    if (isPaused) {
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.6f));
+        DrawText("PAUSED", VIRTUAL_WIDTH / 2 - MeasureText("PAUSED", 40) / 2, VIRTUAL_HEIGHT / 2 - 150, 40, RAYWHITE);
+        
+        float centerX = VIRTUAL_WIDTH / 2.0f;
+        float centerY = VIRTUAL_HEIGHT / 2.0f;
+        Vector2 mousePoint = GetVirtualMouse();
+
+        Rectangle saveBtn     = { centerX - 100, centerY - 80, 200, 50 };
+        Rectangle settingsBtn = { centerX - 100, centerY - 10, 200, 50 };
+        Rectangle exitBtn     = { centerX - 100, centerY + 60, 200, 50 };
+
+        // Save Button
+        DrawRectangleRec(saveBtn, CheckCollisionPointRec(mousePoint, saveBtn) ? LIGHTGRAY : RAYWHITE);
+        DrawRectangleLinesEx(saveBtn, 2, DARKGRAY);
+        DrawText("SAVE GAME", (int)centerX - MeasureText("SAVE GAME", 20) / 2, (int)(saveBtn.y + 15), 20, DARKGRAY);
+
+        // Settings Button
+        DrawRectangleRec(settingsBtn, CheckCollisionPointRec(mousePoint, settingsBtn) ? LIGHTGRAY : RAYWHITE);
+        DrawRectangleLinesEx(settingsBtn, 2, DARKGRAY);
+        DrawText("SETTINGS", (int)centerX - MeasureText("SETTINGS", 20) / 2, (int)(settingsBtn.y + 15), 20, DARKGRAY);
+
+        // Exit Button
+        DrawRectangleRec(exitBtn, CheckCollisionPointRec(mousePoint, exitBtn) ? LIGHTGRAY : RAYWHITE);
+        DrawRectangleLinesEx(exitBtn, 2, DARKGRAY);
+        DrawText("EXIT TO MENU", (int)centerX - MeasureText("EXIT TO MENU", 20) / 2, (int)(exitBtn.y + 15), 20, DARKGRAY);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

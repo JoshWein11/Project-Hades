@@ -1,4 +1,4 @@
-#ifndef SAVEDATA_H
+#ifndef SAVEDATA_H //Code written by: Christopher 沈佳豪
 #define SAVEDATA_H
 
 #include <stdbool.h>
