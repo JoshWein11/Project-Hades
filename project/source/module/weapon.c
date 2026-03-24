@@ -1,8 +1,8 @@
-#include "weapon.h"
+#include "weapon.h"//Code written by: Josh
 #include "raymath.h"
 
 void InitWeapon(Weapon* weapon) {
-    weapon->shootCooldown = 0.2f; // Time between shots in seconds
+    weapon->shootCooldown = 1.75f; // Time between shots in seconds
     weapon->cooldownTimer = 0.0f;
     for (int i = 0; i < MAX_BULLETS; i++) {
         weapon->bullets[i].active = false;

@@ -36,24 +36,57 @@ Start recalibrating. Now.
 TECHNICIAN|tech.png|left
 It's not taking any signals. Controls aren't responding!
 ---
-ELIAS|elias_l.png|left
+CMD|BG|scene3.jpg
+CMD|WAIT|0.5
+---
+ELIAS|elias_r.png|right
 Adrian, we're losing it!
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|voss_l.png|left
 Hold it steady!
 ---
 TECHNICIAN|tech.png|left
 Containment field at seventy percent-dropping fast!
 ---
-ELIAS|elias_l.png|left
+ELIAS|elias_r.png|right
 Adrian, shut it down!
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|voss_l.png|left
 No, this is the breakthrough!
 ---
-CMD|BG|scene3.jpg
-CMD|BGM|bgm3.wav
-CMD|WAIT|1.0
+CMD|BG|scene4(1).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(2).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(3).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(4).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(5).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(6).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(7).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(8).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(9).jpg
+CMD|WAIT|0.2
+---
+CMD|BG|scene4(10).jpg
+CMD|WAIT|0.67
+---
+CMD|BG|scene5.jpg
+CMD|SFX|glassbreak.wav
+CMD|WAIT|3.0
 ---
 
 

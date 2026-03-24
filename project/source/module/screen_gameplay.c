@@ -50,7 +50,7 @@ void InitScreenGameplay(void)
     // ── Player ────────────────────────────────────────────────────────────────
     InitCharacter(&player,
                   600,
-                  815,
+                  867,
                   "../assets/character/Adrian_Walk.png", 6, 2);
 
     // ── Map ───────────────────────────────────────────────────────────────────
@@ -82,9 +82,12 @@ void InitScreenGameplay(void)
         do { \
             if (enemyCount < MAX_ENEMIES) { \
                 Vector2 pts[] = { { x1, y1 }, { x2, y2 } }; \
-                InitEnemy(&enemies[enemyCount++], pts[0], pts, 2, NULL, 32, 32, 1.5f); \
+                InitEnemy(&enemies[enemyCount++], pts[0], pts, 2, "../assets/character/slime_abberant_r.png", "../assets/character/slime_abberant_l.png", 32, 32, 0.67f); \
             } \
         } while(0)
+        SPAWN_BASIC_ENEMY(790,1480,790,1650);
+        SPAWN_BASIC_ENEMY(1070,1480,1070,1650);
+
     #undef SPAWN_BASIC_ENEMY
 }
 

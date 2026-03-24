@@ -96,7 +96,9 @@ typedef struct {
     float      waitTimer;        // Counts down at waypoint before resuming patrol
 
     // ── Sprite / animation ────────────────────────────────────────────────────
-    Texture2D      sprite;       // Shared sprite sheet for all clips
+    Texture2D      spriteRight;  // Texture for facing right
+    Texture2D      spriteLeft;   // Texture for facing left
+    Texture2D*     currentSprite;// Points to the active texture
     bool           hasSprite;    // False → draw placeholder rectangle
     int            frameWidth;   // Pixel width  of ONE frame
     int            frameHeight;  // Pixel height of ONE frame
@@ -146,7 +148,8 @@ void InitEnemy(Enemy*      e,
                Vector2     spawnPos,
                Vector2*    waypoints,
                int         waypointCount,
-               const char* spritePath,
+               const char* spriteRightPath,
+               const char* spriteLeftPath,
                int         frameWidth,
                int         frameHeight,
                float       scale);

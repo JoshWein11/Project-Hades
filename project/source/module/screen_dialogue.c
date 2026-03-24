@@ -264,7 +264,7 @@ void InitScreenDialogue(const char* dialogueFile)
                         SceneEvent* ev = &events[eventCount];
                         memset(ev, 0, sizeof(SceneEvent));
                         ev->type = EVENT_BG;
-                        snprintf(ev->text, sizeof(ev->text), "../assets/images/background/%s", block);
+                        snprintf(ev->text, sizeof(ev->text), "../assets/images/background/%.220s", block);
                         GetCachedTexture(ev->text);
                         eventCount++;
                     }

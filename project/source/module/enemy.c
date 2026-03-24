@@ -82,7 +82,7 @@ static void TickClip(Enemy*          e,
     }
 
     // Clamp dirRow to the available sheet rows
-    int maxRows = (e->sprite.height > 0) ? (e->sprite.height / e->frameHeight) : 1;
+    int maxRows = (e->currentSprite && e->currentSprite->height > 0) ? (e->currentSprite->height / e->frameHeight) : 1;
     int row = clip->startRow + dirRow;
     if (row >= maxRows) row = clip->startRow; // Fallback if sheet is short
 
@@ -169,7 +169,8 @@ void InitEnemy(Enemy*       e,
                Vector2      spawnPos,
                Vector2*     waypoints,
                int          waypointCount,
-               const char*  spritePath,
+               const char*  spriteRightPath,
+               const char*  spriteLeftPath,
                int          frameWidth,
                int          frameHeight,
                float        scale)
@@ -179,7 +180,7 @@ void InitEnemy(Enemy*       e,
     // ── Position / physics ────────────────────────────────────────────────────
     e->position     = spawnPos;
     e->patrolSpeed  = 80.0f;
-    e->chaseSpeed   = 160.0f;
+    e->chaseSpeed   = 167.0f;
 
     // ── Waypoints ─────────────────────────────────────────────────────────────
     waypointCount = (waypointCount < 1) ? 1 : 
@@ -190,9 +191,9 @@ void InitEnemy(Enemy*       e,
     e->patrolDir     = 1;
 
     // ── Vision cone ───────────────────────────────────────────────────────────
-    e->visionRange    = 300.0f; 
-    e->visionAngle    = 40.0f;
-    e->loseRange      = 280.0f;
+    e->visionRange    = 167.0f; 
+    e->visionAngle    = 36.7f;
+    e->loseRange      = 150.0f;
     e->facingAngleDeg = 0.0f;
 
     // ── Health ────────────────────────────────────────────────────────────────
@@ -206,11 +207,13 @@ void InitEnemy(Enemy*       e,
     // ── Sprite & animation ────────────────────────────────────────────────────
     e->frameWidth  = (frameWidth  > 0) ? frameWidth  : 32;
     e->frameHeight = (frameHeight > 0) ? frameHeight : 32;
-    e->scale       = (scale       > 0) ? scale       : 1.5f;
+    e->scale       = (scale       > 0) ? scale       : 0.5f;
     e->frameRec    = (Rectangle){ 0, 0, (float)e->frameWidth, (float)e->frameHeight };
 
-    if (spritePath != NULL) {
-        e->sprite    = LoadTexture(spritePath);
+    if (spriteRightPath != NULL && spriteLeftPath != NULL) {
+        e->spriteRight = LoadTexture(spriteRightPath);
+        e->spriteLeft  = LoadTexture(spriteLeftPath);
+        e->currentSprite = &e->spriteRight;
         e->hasSprite = true;
     }
 
@@ -225,10 +228,10 @@ void InitEnemy(Enemy*       e,
     //   Row 8 = hit  (single-row flash)
     //   Row 9 = death
     e->clipIdle  = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.15f, .loops = true  };
-    e->clipWalk  = (EnemyAnimClip){ .startRow = 0, .frameCount = 4,  .frameDuration = 0.10f, .loops = true  };
-    e->clipChase = (EnemyAnimClip){ .startRow = 0, .frameCount = 4,  .frameDuration = 0.07f, .loops = true  };
-    e->clipHit   = (EnemyAnimClip){ .startRow = 0, .frameCount = 2,  .frameDuration = 0.08f, .loops = false };
-    e->clipDeath = (EnemyAnimClip){ .startRow = 0, .frameCount = 6,  .frameDuration = 0.12f, .loops = false };
+    e->clipWalk  = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.10f, .loops = true  };
+    e->clipChase = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.07f, .loops = true  };
+    e->clipHit   = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.08f, .loops = false };
+    e->clipDeath = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.12f, .loops = false };
 
     // ── Placeholder rectangle ─────────────────────────────────────────────────
     e->width  = (float)e->frameWidth  * e->scale;
@@ -330,6 +333,11 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
     // ── Movement + animation ──────────────────────────────────────────────────
     int dirRow = FacingRow(e);
 
+    if (e->hasSprite) {
+        if (dirRow == 1) e->currentSprite = &e->spriteLeft;
+        else e->currentSprite = &e->spriteRight; // Right, Up, Down default to right
+    }
+
     switch (e->state) {
 
         case ENEMY_PATROL: {
@@ -393,7 +401,7 @@ void DrawEnemy(Enemy* e) {
 
     if (e->hasSprite) {
         Rectangle dest = { e->position.x, e->position.y, w, h };
-        DrawTexturePro(e->sprite, e->frameRec, dest, (Vector2){0,0}, 0.0f, tint);
+        DrawTexturePro(*e->currentSprite, e->frameRec, dest, (Vector2){0,0}, 0.0f, tint);
     } else {
         // Placeholder: colour encodes state
         Color base = (e->state == ENEMY_PATROL) ? (Color){60, 120, 220, 255}  :  // Blue
@@ -452,7 +460,8 @@ void DrawEnemy(Enemy* e) {
 // ─────────────────────────────────────────────────────────────────────────────
 void UnloadEnemy(Enemy* e) {
     if (e->hasSprite) {
-        UnloadTexture(e->sprite);
+        UnloadTexture(e->spriteRight);
+        UnloadTexture(e->spriteLeft);
         e->hasSprite = false;
     }
 }
