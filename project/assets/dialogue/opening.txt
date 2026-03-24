@@ -2,29 +2,59 @@ CMD|BG|scene1.jpg
 CMD|BGM|bgm1.wav
 CMD|WAIT|1.0
 ---
-LYRA|lyra.png|left
+LYRA|lyra_l.png|left
 Dad, are those the monsters again?
 ---
-ADRIAN|voss_1.png|right
+ADRIAN|voss_r.png|right
 They're not monsters, Lyra. They're... breakthroughs
 ---
-LYRA|lyra.png|left
+LYRA|lyra_l.png|left
 They don't look like breakthroughs
 ---
-ADRIAN|voss_1.png|right
+ADRIAN|voss_r.png|right
 They will... we're just not there yet.
 ---
 CMD|BG|scene2.jpg
 CMD|BGM|bgm2.wav
 CMD|WAIT|1.0
 ---
-ELIAS|elias.png|left
+ELIAS|elias_l.png|left
 Adrian, the readings are spiking.
 ---
-ADRIAN|voss_1.png|right
+ADRIAN|voss_r.png|right
 Good. That means it's adapting.
 ---
-TECHNICIAN|tech.png|right
-Containment field down three percent, Boss
+TECHNICIAN|tech.png|left
+Containment field down three percent, Boss.
 ---
+ELIAS|elias_l.png|left
+That's not good.
+---
+ADRIAN|voss_r.png|right
+Start recalibrating. Now.
+---
+TECHNICIAN|tech.png|left
+It's not taking any signals. Controls aren't responding!
+---
+ELIAS|elias_l.png|left
+Adrian, we're losing it!
+---
+ADRIAN|voss_r.png|right
+Hold it steady!
+---
+TECHNICIAN|tech.png|left
+Containment field at seventy percent-dropping fast!
+---
+ELIAS|elias_l.png|left
+Adrian, shut it down!
+---
+ADRIAN|voss_r.png|right
+No, this is the breakthrough!
+---
+CMD|BG|scene3.jpg
+CMD|BGM|bgm3.wav
+CMD|WAIT|1.0
+---
+
+
 

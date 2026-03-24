@@ -422,10 +422,10 @@ void DrawScreenDialogue(void)
     // Draw character portrait
     Texture2D portrait = portraits[currentEvent];
     if (portrait.id > 0) {
-        float portraitScale = 200.0f / (float)portrait.width;
+        float portraitScale = 367.0f / (float)portrait.width;
         float portraitW = portrait.width * portraitScale;
         float portraitH = portrait.height * portraitScale;
-        float portraitY = VIRTUAL_HEIGHT - portraitH - 200;
+        float portraitY = VIRTUAL_HEIGHT - portraitH - 190;
 
         if (current->isRight) {
             float portraitX = VIRTUAL_WIDTH - portraitW - 40;

@@ -63,7 +63,7 @@ void DrawScreenMenu(void) //Draw the Screen
     // Start Button
     DrawRectangleRec(startBtn, CheckCollisionPointRec(mousePoint, startBtn) ? LIGHTGRAY : RAYWHITE);
     DrawRectangleLinesEx(startBtn, 2, DARKGRAY);
-    DrawText("START", (int)centerX - MeasureText("START", 20) / 2, (int)(startBtn.y + 15), 20, DARKGRAY);
+    DrawText("NEW GAME", (int)centerX - MeasureText("NEW GAME", 20) / 2, (int)(startBtn.y + 15), 20, DARKGRAY);
 
     // Load Game Button (greyed out if no save exists)
     if (hasSave) {
