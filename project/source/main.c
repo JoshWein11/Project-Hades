@@ -27,16 +27,15 @@ int main(void)
     InitWindow(settings->screenWidth, settings->screenHeight, settings->title);
     SetExitKey(0);  // Disable ESC as the close-window key (we use it for settings)
 
+    InitAudioDevice();
+    Audio gameAudio;
+    InitAudio(&gameAudio);
+    
     // Initialize all screens
     InitScreenSplash();
     InitScreenMenu();
     InitScreenDialogue("../assets/dialogue/opening.txt");
     InitScreenGameplay();
-
-    // Initialize Audio
-    InitAudioDevice();
-    Audio gameAudio;
-    InitAudio(&gameAudio);
     
     GameScreen currentScreen = SPLASH;
     GameScreen previousScreen = MAIN_MENU;
@@ -93,7 +92,7 @@ int main(void)
                 }
                 break;
             case DIALOGUE:
-                currentScreen = UpdateScreenDialogue();
+                currentScreen = UpdateScreenDialogue(&gameAudio);
                 break;
             case GAMEPLAY: {
                 GameScreen next = UpdateScreenGameplay(&gameAudio);

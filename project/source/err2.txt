@@ -1,7 +1,0 @@
-module/screen_gameplay.c: In function 'UpdateScreenGameplay':
-module/screen_gameplay.c:156:23: error: 'Character' has no member named 'hitInvincibleTimer'
-  156 |             if (player.hitInvincibleTimer <= 0.0f && !player.playerInvincible) {
-      |                       ^
-module/screen_gameplay.c:168:27: error: 'Character' has no member named 'hitInvincibleTimer'
-  168 |                     player.hitInvincibleTimer = 1.0f; // 1 second of i-frames
-      |                           ^

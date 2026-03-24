@@ -3,20 +3,31 @@
 
 #include "screens.h"
 #include "raylib.h"
+#include "audio.h"
 #include <stdbool.h>
 
-#define MAX_DIALOGUES 64
+#define MAX_DIALOGUES 128
+
+typedef enum {
+    EVENT_DIALOGUE,
+    EVENT_BG,
+    EVENT_BGM,
+    EVENT_SFX,
+    EVENT_WAIT
+} EventType;
 
 typedef struct {
-    char speaker[64];
-    char text[256];
-    char image[128];
-    bool isRight;
-} DialogueEntry;
+    EventType type;
+    char text[256];      // Used for DIALOGUE text, or file paths for BG/BGM/SFX
+    char speaker[64];    // Used for speaker name
+    char image[128];     // Used for portrait image
+    bool isRight;        // Used for portrait orientation
+    float floatArg;      // Used for WAIT time
+} SceneEvent;
 
 void InitScreenDialogue(const char* dialogueFile);
 void ResetScreenDialogue(void);
-GameScreen UpdateScreenDialogue(void);
+GameScreen UpdateScreenDialogue(Audio* audio);
 void DrawScreenDialogue(void);
 void UnloadScreenDialogue(void);
 

@@ -6,11 +6,11 @@
 //Load Tiled Map from JSON file and Texture from Assets
 void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->map = cute_tiled_load_map_from_file(jsonPath, NULL);
-    mapData->tilesetx1 = LoadTexture("../assets/images/tilesetx1.png");
-    mapData->labtileset = LoadTexture("../assets/images/labtileset.png");
-    mapData->tube = LoadTexture("../assets/images/tube.png");
-    mapData->spritesheet = LoadTexture("../assets/images/spritesheet.png");
-    mapData->SciFi = LoadTexture("../assets/images/SciFi.png");
+    mapData->tilesetx1 = LoadTexture("../assets/images/tileset/tilesetx1.png");
+    mapData->labtileset = LoadTexture("../assets/images/tileset/labtileset.png");
+    mapData->tube = LoadTexture("../assets/images/tileset/tube.png");
+    mapData->spritesheet = LoadTexture("../assets/images/tileset/spritesheet.png");
+    mapData->SciFi = LoadTexture("../assets/images/tileset/SciFi.png");
     mapData->collisionCount = 0;
 
     if (mapData->map) {

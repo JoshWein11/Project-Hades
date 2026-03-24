@@ -1,21 +1,41 @@
-#include "raylib.h" //Code written by: Christopher 沈佳豪
+#include "raylib.h" //Code written by: Christopher 沈佳豪 
 #include "screen_dialogue.h"
 #include "setting.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-// Dialogue entries parsed from file
-static DialogueEntry dialogues[MAX_DIALOGUES];
-static int dialogueCount = 0;
-static int currentDialogue = 0;
+// Event entries parsed from file
+static SceneEvent events[MAX_DIALOGUES];
+static int eventCount = 0;
+static int currentEvent = 0;
 
-// Portrait textures (one per dialogue entry)
+// Portrait textures (maps 1:1 with dialogue events)
 static Texture2D portraits[MAX_DIALOGUES];
 
-// Optional background image
-static Texture2D bgTexture;
-static bool hasBg = false;
+// Active background and music state
+static Texture2D activeBg;
+static bool hasActiveBg = false;
+static Music activeBgm;
+static bool hasActiveBgm = false;
+
+// Asset caches for dynamic loading
+#define MAX_CACHE 32
+static Texture2D cachedTextures[MAX_CACHE];
+static char cachedTextureNames[MAX_CACHE][128];
+static int texCacheCount = 0;
+
+static Music cachedMusic[MAX_CACHE];
+static char cachedMusicNames[MAX_CACHE][128];
+static int musicCacheCount = 0;
+
+static Sound cachedSounds[MAX_CACHE];
+static char cachedSoundNames[MAX_CACHE][128];
+static int soundCacheCount = 0;
+
+// State for WAIT event
+static int waitTimerFrames = 0;
+static int waitTargetFrames = 0;
 
 // Typewriter effect state
 static int framesCounter = 0;
@@ -46,19 +66,63 @@ static void TrimString(char* str)
     }
 }
 
+static Texture2D GetCachedTexture(const char* filename) {
+    for (int i = 0; i < texCacheCount; i++) {
+        if (strcmp(cachedTextureNames[i], filename) == 0) return cachedTextures[i];
+    }
+    if (texCacheCount < MAX_CACHE) {
+        Texture2D t = LoadTexture(filename);
+        strcpy(cachedTextureNames[texCacheCount], filename);
+        cachedTextures[texCacheCount] = t;
+        texCacheCount++;
+        return t;
+    }
+    Texture2D empty = {0};
+    return empty;
+}
+
+static Music GetCachedMusic(const char* filename) {
+    for (int i = 0; i < musicCacheCount; i++) {
+        if (strcmp(cachedMusicNames[i], filename) == 0) return cachedMusic[i];
+    }
+    if (musicCacheCount < MAX_CACHE) {
+        Music m = LoadMusicStream(filename);
+        strcpy(cachedMusicNames[musicCacheCount], filename);
+        cachedMusic[musicCacheCount] = m;
+        musicCacheCount++;
+        return m;
+    }
+    Music empty = {0};
+    return empty;
+}
+
+static Sound GetCachedSound(const char* filename) {
+    for (int i = 0; i < soundCacheCount; i++) {
+        if (strcmp(cachedSoundNames[i], filename) == 0) return cachedSounds[i];
+    }
+    if (soundCacheCount < MAX_CACHE) {
+        Sound s = LoadSound(filename);
+        strcpy(cachedSoundNames[soundCacheCount], filename);
+        cachedSounds[soundCacheCount] = s;
+        soundCacheCount++;
+        return s;
+    }
+    Sound empty = {0};
+    return empty;
+}
+
 // Helper: reset the typewriter effect for the current dialogue entry
 static void ResetTypewriter(void)
 {
     framesCounter = 0;
     textIndex = 0;
     isFinishedTyping = false;
-    dialogueLength = (int)strlen(dialogues[currentDialogue].text);
+    dialogueLength = (int)strlen(events[currentEvent].text);
     memset(dialogueCurrent, 0, sizeof(dialogueCurrent));
 }
 
 // Helper: parse a single dialogue block (speaker line + text line)
-// Returns true if successfully parsed
-static bool ParseDialogueBlock(const char* block, DialogueEntry* entry)
+static bool ParseDialogueEvent(const char* block, SceneEvent* entry)
 {
     // Find the first newline to split speaker line and text line
     const char* newline = strchr(block, '\n');
@@ -107,7 +171,7 @@ static bool ParseDialogueBlock(const char* block, DialogueEntry* entry)
     TrimString(position);
     entry->isRight = (strcmp(position, "right") == 0);
 
-    // Dialogue text
+    entry->type = EVENT_DIALOGUE;
     strncpy(entry->text, textLine, 255);
     entry->text[255] = '\0';
 
@@ -116,151 +180,257 @@ static bool ParseDialogueBlock(const char* block, DialogueEntry* entry)
 
 void InitScreenDialogue(const char* dialogueFile)
 {
-    // Reset state
-    dialogueCount = 0;
-    currentDialogue = 0;
-    hasBg = false;
+    // Reset state and caches
+    eventCount = 0;
+    currentEvent = 0;
+    texCacheCount = 0;
+    musicCacheCount = 0;
+    soundCacheCount = 0;
+    hasActiveBg = false;
+    hasActiveBgm = false;
+    memset(&activeBg, 0, sizeof(Texture2D));
+    memset(&activeBgm, 0, sizeof(Music));
 
-    // Load the text file
     char* fileText = LoadFileText(dialogueFile);
     if (fileText == NULL) {
         TraceLog(LOG_WARNING, "DIALOGUE: Failed to load file: %s", dialogueFile);
         return;
     }
 
-    // Split by "---" separator
-    // First block = background, remaining blocks = dialogue entries
     char* text = fileText;
     char* separator = NULL;
     int blockIndex = 0;
 
     while ((separator = strstr(text, "---")) != NULL) {
-        // Extract the block between current position and the separator
         int blockLen = (int)(separator - text);
-        char block[512];
-        if (blockLen >= 512) blockLen = 511;
+        char block[1024];
+        if (blockLen >= 1024) blockLen = 1023;
         strncpy(block, text, blockLen);
         block[blockLen] = '\0';
         TrimString(block);
 
-        if (blockIndex == 0) {
-            // First block: background image or "none"
-            if (strcmp(block, "none") != 0 && strlen(block) > 0) {
-                char bgPath[256];
-                snprintf(bgPath, sizeof(bgPath), "../assets/images/%s", block);
-                bgTexture = LoadTexture(bgPath);
-                hasBg = (bgTexture.id > 0);
-            }
-        } else {
-            // Dialogue entry block
-            if (dialogueCount < MAX_DIALOGUES && strlen(block) > 0) {
-                if (ParseDialogueBlock(block, &dialogues[dialogueCount])) {
-                    // Load portrait texture
-                    char portraitPath[256];
-                    snprintf(portraitPath, sizeof(portraitPath), "../assets/images/%s", dialogues[dialogueCount].image);
-                    portraits[dialogueCount] = LoadTexture(portraitPath);
-                    dialogueCount++;
+        if (strlen(block) > 0) {
+            if (strstr(block, "CMD|") != NULL) {
+                // Command block
+                char* context;
+                char* line = strtok_s(block, "\r\n", &context);
+                while (line != NULL && eventCount < MAX_DIALOGUES) {
+                    TrimString(line);
+                    if (strncmp(line, "CMD|", 4) == 0) {
+                        char cmdType[16];
+                        char cmdArg[128];
+                        char* p1 = strchr(line, '|');
+                        if (p1) {
+                            char* p2 = strchr(p1 + 1, '|');
+                            if (p2) {
+                                int typeLen = (int)(p2 - p1 - 1);
+                                strncpy(cmdType, p1 + 1, typeLen); 
+                                cmdType[typeLen] = '\0';
+                                strcpy(cmdArg, p2 + 1);
+                                TrimString(cmdType); TrimString(cmdArg);
+
+                                SceneEvent* ev = &events[eventCount];
+                                memset(ev, 0, sizeof(SceneEvent));
+
+                                if (strcmp(cmdType, "BG") == 0) {
+                                    ev->type = EVENT_BG;
+                                    snprintf(ev->text, sizeof(ev->text), "../assets/images/background/%s", cmdArg);
+                                    GetCachedTexture(ev->text); // Preload
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "BGM") == 0) {
+                                    ev->type = EVENT_BGM;
+                                    snprintf(ev->text, sizeof(ev->text), "../assets/music/%s", cmdArg);
+                                    GetCachedMusic(ev->text); // Preload
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "SFX") == 0) {
+                                    ev->type = EVENT_SFX;
+                                    snprintf(ev->text, sizeof(ev->text), "../assets/sfx/%s", cmdArg);
+                                    GetCachedSound(ev->text); // Preload
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "WAIT") == 0) {
+                                    ev->type = EVENT_WAIT;
+                                    ev->floatArg = (float)atof(cmdArg);
+                                    eventCount++;
+                                }
+                            }
+                        }
+                    }
+                    line = strtok_s(NULL, "\r\n", &context);
+                }
+            } else {
+                // Legacy BG or normal dialogue
+                if (blockIndex == 0 && strchr(block, '|') == NULL) {
+                    if (strcmp(block, "none") != 0 && eventCount < MAX_DIALOGUES) {
+                        SceneEvent* ev = &events[eventCount];
+                        memset(ev, 0, sizeof(SceneEvent));
+                        ev->type = EVENT_BG;
+                        snprintf(ev->text, sizeof(ev->text), "../assets/images/background/%s", block);
+                        GetCachedTexture(ev->text);
+                        eventCount++;
+                    }
+                } else {
+                    if (eventCount < MAX_DIALOGUES) {
+                        SceneEvent* ev = &events[eventCount];
+                        if (ParseDialogueEvent(block, ev)) {
+                            char portraitPath[256];
+                            snprintf(portraitPath, sizeof(portraitPath), "../assets/images/character/%s", ev->image);
+                            portraits[eventCount] = LoadTexture(portraitPath);
+                            eventCount++;
+                        }
+                    }
                 }
             }
         }
-
         blockIndex++;
-        // Move past the "---" separator
         text = separator + 3;
     }
 
     UnloadFileText(fileText);
 
-    // Initialize typewriter for the first entry
-    if (dialogueCount > 0) {
+    if (eventCount > 0 && events[0].type == EVENT_DIALOGUE) {
         ResetTypewriter();
     }
 
-    TraceLog(LOG_INFO, "DIALOGUE: Loaded %d entries (hasBg=%d)", dialogueCount, hasBg);
+    TraceLog(LOG_INFO, "DIALOGUE: Loaded %d events", eventCount);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ResetScreenDialogue — resets dialogue back to entry 0 without reloading files
-// ─────────────────────────────────────────────────────────────────────────────
 void ResetScreenDialogue(void)
 {
-    currentDialogue = 0;
-    if (dialogueCount > 0) {
+    // Start from beginning with first BG & BGM if applicable
+    currentEvent = 0;
+    waitTargetFrames = 0;
+    waitTimerFrames = 0;
+    hasActiveBg = false;
+    
+    if (hasActiveBgm) {
+        StopMusicStream(activeBgm);
+        hasActiveBgm = false;
+    }
+
+    if (eventCount > 0 && events[0].type == EVENT_DIALOGUE) {
         ResetTypewriter();
     }
 }
 
-GameScreen UpdateScreenDialogue(void)
+GameScreen UpdateScreenDialogue(Audio* audio)
 {
-    if (dialogueCount == 0) return GAMEPLAY;
-
-    // Typewriter effect logic
-    if (!isFinishedTyping) {
-        framesCounter++;
-        // Reveal a new character every 3 frames
-        if (framesCounter % 3 == 0) {
-            if (textIndex < dialogueLength) {
-                dialogueCurrent[textIndex] = dialogues[currentDialogue].text[textIndex];
-                dialogueCurrent[textIndex + 1] = '\0';
-                textIndex++;
-            } else {
-                isFinishedTyping = true;
-            }
-        }
-    }
-    
-    // Press space or click to speed up or advance
-    if (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        if (!isFinishedTyping) {
-            // Speed up: instantly show full text
-            strcpy(dialogueCurrent, dialogues[currentDialogue].text);
-            isFinishedTyping = true;
+    // Fast-forward through non-blocking events (BG, BGM, SFX)
+    while (currentEvent < eventCount) {
+        SceneEvent* ev = &events[currentEvent];
+        if (ev->type == EVENT_BG) {
+            activeBg = GetCachedTexture(ev->text);
+            hasActiveBg = (activeBg.id > 0);
+            currentEvent++;
+        } else if (ev->type == EVENT_BGM) {
+            if (hasActiveBgm) StopMusicStream(activeBgm);
+            activeBgm = GetCachedMusic(ev->text);
+            hasActiveBgm = (activeBgm.stream.buffer != NULL);
+            if (hasActiveBgm) PlayMusicStream(activeBgm);
+            currentEvent++;
+        } else if (ev->type == EVENT_SFX) {
+            Sound s = GetCachedSound(ev->text);
+            if (s.stream.buffer != NULL) PlaySound(s);
+            currentEvent++;
         } else {
-            // Advance to next dialogue entry
-            currentDialogue++;
-            if (currentDialogue >= dialogueCount) {
-                // All dialogue finished, go to gameplay
-                return GAMEPLAY;
-            }
-            ResetTypewriter();
+            // Found a blocking event (WAIT or DIALOGUE)
+            break;
         }
     }
+
+    // Always update BGM if it's playing
+    if (hasActiveBgm) {
+        UpdateMusicStream(activeBgm);
+    }
+
+    // Sequence end reached
+    if (currentEvent >= eventCount) {
+        if (hasActiveBgm) StopMusicStream(activeBgm);
+        return GAMEPLAY;
+    }
+
+    // Handle blocking events
+    SceneEvent* current = &events[currentEvent];
     
+    if (current->type == EVENT_WAIT) {
+        if (waitTargetFrames == 0) {
+            waitTargetFrames = (int)(current->floatArg * 60.0f); // Map to 60 FPS
+            waitTimerFrames = 0;
+        }
+        waitTimerFrames++;
+        if (waitTimerFrames >= waitTargetFrames) {
+            waitTargetFrames = 0;
+            currentEvent++;
+            if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+                ResetTypewriter();
+            }
+        }
+    } 
+    else if (current->type == EVENT_DIALOGUE) {
+        // Typewriter effect logic
+        if (!isFinishedTyping) {
+            framesCounter++;
+            if (framesCounter % 3 == 0) {
+                if (textIndex < dialogueLength) {
+                    dialogueCurrent[textIndex] = current->text[textIndex];
+                    dialogueCurrent[textIndex + 1] = '\0';
+                    textIndex++;
+                    PlayRandomSpeaking(audio);
+                } else {
+                    isFinishedTyping = true;
+                }
+            }
+        }
+        
+        // Input logic to advance
+        if (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (!isFinishedTyping) {
+                // Speed up typing
+                strcpy(dialogueCurrent, current->text);
+                isFinishedTyping = true;
+                textIndex = dialogueLength;
+            } else {
+                // Advance
+                currentEvent++;
+                if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+                    ResetTypewriter();
+                }
+            }
+        }
+    }
+
     return DIALOGUE;
 }
 
 void DrawScreenDialogue(void)
 {
-    if (hasBg) {
-        // Draw background image scaled to fill screen
-        float scaleX = (float)VIRTUAL_WIDTH / (float)bgTexture.width;
-        float scaleY = (float)VIRTUAL_HEIGHT / (float)bgTexture.height;
+    if (hasActiveBg) {
+        float scaleX = (float)VIRTUAL_WIDTH / (float)activeBg.width;
+        float scaleY = (float)VIRTUAL_HEIGHT / (float)activeBg.height;
         float scale = (scaleX > scaleY) ? scaleX : scaleY;
-        DrawTextureEx(bgTexture, (Vector2){0, 0}, 0.0f, scale, WHITE);
-        // Slight dim on top for readability
+        DrawTextureEx(activeBg, (Vector2){0, 0}, 0.0f, scale, WHITE);
         DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.3f));
     } else {
-        // No bg image: just dim overlay over whatever is behind (gameplay)
         DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.5f));
     }
 
-    if (dialogueCount == 0) return;
+    if (currentEvent >= eventCount || events[currentEvent].type != EVENT_DIALOGUE) {
+        return; // Only draw UI elements if we are on a dialogue prompt
+    }
+
+    SceneEvent* current = &events[currentEvent];
 
     // Draw character portrait
-    Texture2D portrait = portraits[currentDialogue];
+    Texture2D portrait = portraits[currentEvent];
     if (portrait.id > 0) {
-        // Scale portrait to a reasonable size (e.g., 200px wide, maintain aspect ratio)
         float portraitScale = 200.0f / (float)portrait.width;
         float portraitW = portrait.width * portraitScale;
         float portraitH = portrait.height * portraitScale;
         float portraitY = VIRTUAL_HEIGHT - portraitH - 200;
 
-        if (dialogues[currentDialogue].isRight) {
-            // Draw on the right side
+        if (current->isRight) {
             float portraitX = VIRTUAL_WIDTH - portraitW - 40;
             DrawTextureEx(portrait, (Vector2){portraitX, portraitY}, 0.0f, portraitScale, WHITE);
         } else {
-            // Draw on the left side
             float portraitX = 40;
             DrawTextureEx(portrait, (Vector2){portraitX, portraitY}, 0.0f, portraitScale, WHITE);
         }
@@ -269,45 +439,59 @@ void DrawScreenDialogue(void)
     // Dialogue Box properties
     int boxMargin = 40;
     int boxHeight = 150;
-    Rectangle dialogBox = { boxMargin, VIRTUAL_HEIGHT - boxHeight - boxMargin, VIRTUAL_WIDTH - (boxMargin * 2), boxHeight };
+    Rectangle dialogBox = { (float)boxMargin, (float)(VIRTUAL_HEIGHT - boxHeight - boxMargin), (float)(VIRTUAL_WIDTH - (boxMargin * 2)), (float)boxHeight };
     
     // Name Box properties
-    Rectangle nameBox = { boxMargin, dialogBox.y - 40, 200, 40 };
+    Rectangle nameBox = { (float)boxMargin, dialogBox.y - 40.0f, 200.0f, 40.0f };
     
-    // Draw Name Box (styled like a dark tab)
+    // Draw Name Box
     DrawRectangleRec(nameBox, Fade(BLACK, 0.8f));
-    DrawRectangleLinesEx(nameBox, 3, WHITE);
-    DrawText(dialogues[currentDialogue].speaker, nameBox.x + 20, nameBox.y + 10, 20, WHITE);
+    DrawRectangleLinesEx(nameBox, 3.0f, WHITE);
+    DrawText(current->speaker, (int)nameBox.x + 20, (int)nameBox.y + 10, 20, WHITE);
     
     // Draw Main Dialogue Box
     DrawRectangleRec(dialogBox, Fade(BLACK, 0.8f));
-    DrawRectangleLinesEx(dialogBox, 3, WHITE);
+    DrawRectangleLinesEx(dialogBox, 3.0f, WHITE);
     
-    // Draw the typing text inside the box
-    DrawText(dialogueCurrent, dialogBox.x + 20, dialogBox.y + 20, 24, LIGHTGRAY);
+    // Draw typing text
+    DrawText(dialogueCurrent, (int)dialogBox.x + 20, (int)dialogBox.y + 20, 24, LIGHTGRAY);
     
-    // Blinking prompt when finished
+    // Blinking prompt
     if (isFinishedTyping) {
         framesCounter++;
-        if ((framesCounter / 30) % 2 == 0) { // Blink every half second
-            DrawText(">>", dialogBox.x + dialogBox.width - 30, dialogBox.y + dialogBox.height - 30, 20, WHITE);
+        if ((framesCounter / 30) % 2 == 0) {
+            DrawText(">>", (int)(dialogBox.x + dialogBox.width - 30), (int)(dialogBox.y + dialogBox.height - 30), 20, WHITE);
         }
     }
 }
 
 void UnloadScreenDialogue(void)
 {
-    // Unload portrait textures
-    for (int i = 0; i < dialogueCount; i++) {
+    // Unload portraits
+    for (int i = 0; i < eventCount; i++) {
         if (portraits[i].id > 0) {
             UnloadTexture(portraits[i]);
+            portraits[i].id = 0;
         }
     }
-    // Unload background texture
-    if (hasBg && bgTexture.id > 0) {
-        UnloadTexture(bgTexture);
+    // Unload cached textures
+    for (int i = 0; i < texCacheCount; i++) {
+        if (cachedTextures[i].id > 0) UnloadTexture(cachedTextures[i]);
     }
-    dialogueCount = 0;
-    currentDialogue = 0;
-    hasBg = false;
+    // Unload cached sounds
+    for (int i = 0; i < soundCacheCount; i++) {
+        if (cachedSounds[i].stream.buffer != NULL) UnloadSound(cachedSounds[i]);
+    }
+    // Unload cached music
+    for (int i = 0; i < musicCacheCount; i++) {
+        if (cachedMusic[i].stream.buffer != NULL) UnloadMusicStream(cachedMusic[i]);
+    }
+
+    eventCount = 0;
+    currentEvent = 0;
+    texCacheCount = 0;
+    soundCacheCount = 0;
+    musicCacheCount = 0;
+    hasActiveBg = false;
+    hasActiveBgm = false;
 }

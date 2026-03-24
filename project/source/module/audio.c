@@ -9,6 +9,12 @@ void InitAudio(Audio* audio) {
     audio->sfxFootsteps[1] = LoadSound("../assets/sfx/footstep/2.ogg");
     audio->sfxFootsteps[2] = LoadSound("../assets/sfx/footstep/3.ogg");
     audio->sfxFootsteps[3] = LoadSound("../assets/sfx/footstep/4.ogg");
+    
+    // Load speaking sounds (assuming they will be placed here)
+    audio->sfxSpeaking[0] = LoadSound("../assets/sfx/speaking/speak1.wav");
+    audio->sfxSpeaking[1] = LoadSound("../assets/sfx/speaking/speak2.wav");
+    audio->sfxSpeaking[2] = LoadSound("../assets/sfx/speaking/speak3.wav");
+    audio->sfxSpeaking[3] = LoadSound("../assets/sfx/speaking/speak4.wav");
 }
 
 void UnloadAudio(Audio* audio) {
@@ -18,6 +24,11 @@ void UnloadAudio(Audio* audio) {
     // Unload footstep sounds
     for (int i = 0; i < MAX_FOOTSTEP_SOUNDS; i++) {
         UnloadSound(audio->sfxFootsteps[i]);
+    }
+    
+    // Unload speaking sounds
+    for (int i = 0; i < 4; i++) {
+        UnloadSound(audio->sfxSpeaking[i]);
     }
 }
 
@@ -34,4 +45,18 @@ void PlayRandomFootstep(Audio* audio) {
     SetSoundVolume(audio->sfxFootsteps[stepIndex], volShift);
     
     PlaySound(audio->sfxFootsteps[stepIndex]);
+}
+
+void PlayRandomSpeaking(Audio* audio) {
+    int speakIndex = GetRandomValue(0, 3);
+    
+    // Pitch shift slightly for natural variation (e.g., 90% to 110%)
+    float pitchShift = GetRandomValue(90, 110) / 100.0f;
+    SetSoundPitch(audio->sfxSpeaking[speakIndex], pitchShift);
+    
+    // Volume shift slightly for natural variation (e.g., 80% to 100%)
+    float volShift = GetRandomValue(80, 100) / 100.0f;
+    SetSoundVolume(audio->sfxSpeaking[speakIndex], volShift);
+    
+    PlaySound(audio->sfxSpeaking[speakIndex]);
 }
