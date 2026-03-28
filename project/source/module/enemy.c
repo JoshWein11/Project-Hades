@@ -10,25 +10,64 @@
 
 
 // Moves the enemy toward 'target' at 'speed' px/s with wall collision.
+// Uses a "feeler" steering approach: it tests angles deviating from the direct
+// line to the target, picking the first angle where its hitbox isn't blocked.
 // Returns true when it arrives (within 4 px).
-// Also updates facingAngleDeg from the movement direction.
 static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt,
                        Rectangle* colliders, int colliderCount) {
     Vector2 diff = Vector2Subtract(target, e->position);
     float dist = Vector2Length(diff);
-    if (dist < 4.0f) {
-        e->position = target;
+    // Increased arrival radius to 16.0f to prevent stuttering when whiskers push away from walls
+    if (dist < 16.0f) {
+        // e->position = target; // Removed snapping to prevent jerky movement
         return true;
     }
-    Vector2 dir = Vector2Normalize(diff);
-    float dx = dir.x * speed * dt;
-    float dy = dir.y * speed * dt;
 
-    // Enemy hitbox (scaled sprite size)
+    float desiredAngle = atan2f(diff.y, diff.x) * RAD2DEG;
+    float bestAngle = desiredAngle;
+
+    // Enemy hitbox size
     float w = (float)e->frameWidth  * e->scale;
     float h = (float)e->frameHeight * e->scale;
 
-    // Axis-separated collision (same approach as the player in character.c)
+    // Context Steering: test angles outward from the ideal path.
+    // We project the enemy's hitbox forward by a short distance.
+    float deviations[] = { 0.0f, 30.0f, -30.0f, 60.0f, -60.0f, 85.0f, -85.0f };
+    float lookAhead = 12.0f; // pixel distance to project hitbox for testing
+
+    for (int i = 0; i < 7; i++) {
+        float testAngle = desiredAngle + deviations[i];
+        Vector2 testDir = { cosf(testAngle * DEG2RAD), sinf(testAngle * DEG2RAD) };
+        
+        // Project the hitbox forward, but shrink it slightly by 1px on all sides
+        // to prevent getting falsely "blocked" by a wall we are already sliding against.
+        Rectangle testRec = { 
+            (e->position.x + testDir.x * lookAhead) + 1.0f, 
+            (e->position.y + testDir.y * lookAhead) + 1.0f, 
+            w - 2.0f, 
+            h - 2.0f 
+        };
+        
+        bool blocked = false;
+        for (int c = 0; c < colliderCount; c++) {
+            if (CheckCollisionRecs(testRec, colliders[c])) {
+                blocked = true;
+                break;
+            }
+        }
+        
+        if (!blocked) {
+            bestAngle = testAngle;
+            break;
+        }
+    }
+
+    // Move along the chosen unblocked angle
+    Vector2 moveDir = { cosf(bestAngle * DEG2RAD), sinf(bestAngle * DEG2RAD) };
+    float dx = moveDir.x * speed * dt;
+    float dy = moveDir.y * speed * dt;
+
+    // Apply strict axis-separated collision sliding as a final safety net
     // Test X axis
     Rectangle testX = { e->position.x + dx, e->position.y, w, h };
     bool blockedX = false;
@@ -45,8 +84,8 @@ static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt,
     }
     if (!blockedY) e->position.y += dy;
 
-    // Track heading so the vision cone faces the direction of travel
-    e->facingAngleDeg = atan2f(dir.y, dir.x) * RAD2DEG;
+    // Track heading so the vision cone and sprites face the direction of travel
+    e->facingAngleDeg = bestAngle;
     return false;
 }
 
@@ -163,6 +202,144 @@ static bool CanSeePlayer(const Enemy* e, Vector2 playerPos,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BFS Pathfinding over NavNodes — guarantees the enemy can walk around walls.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Helper: True if a line intersects a rectangle cleanly
+static bool LineIntersectsRect(Vector2 start, Vector2 end, Rectangle rec) {
+    if (CheckCollisionPointRec(start, rec) || CheckCollisionPointRec(end, rec)) return true;
+    Vector2 point;
+    Vector2 r1 = {rec.x, rec.y};
+    Vector2 r2 = {rec.x + rec.width, rec.y};
+    Vector2 r3 = {rec.x + rec.width, rec.y + rec.height};
+    Vector2 r4 = {rec.x, rec.y + rec.height};
+    if (CheckCollisionLines(start, end, r1, r2, &point)) return true;
+    if (CheckCollisionLines(start, end, r2, r3, &point)) return true;
+    if (CheckCollisionLines(start, end, r3, r4, &point)) return true;
+    if (CheckCollisionLines(start, end, r4, r1, &point)) return true;
+    return false;
+}
+
+// Helper: True if a clear line of sight exists between A and B
+static bool HasLOS(Vector2 a, Vector2 b, Rectangle* colliders, int colliderCount) {
+    for (int i = 0; i < colliderCount; i++) {
+        if (LineIntersectsRect(a, b, colliders[i])) return false; // Blocked by wall
+    }
+    return true; // Clear path
+}
+
+// Build a guaranteed path across the NavNodes using Breadth-First-Search
+static void BuildNavPath(Enemy* e, Vector2 goal,
+                         Vector2* navNodes, int navNodeCount,
+                         Rectangle* colliders, int colliderCount) {
+    e->navPathActive  = false;
+    e->navPathCount   = 0;
+    e->navPathCurrent = 0;
+
+    if (navNodeCount <= 0) return;
+
+    Vector2 current = EnemyCentre(e);
+
+    // 1. If we can see the goal directly, just walk there!
+    if (HasLOS(current, goal, colliders, colliderCount)) {
+        e->navPath[0] = goal;
+        e->navPathCount = 1;
+        e->navPathActive = true;
+        return;
+    }
+
+    // 2. Find the nav node closest to the enemy (start node)
+    int startNode = -1;
+    float bestStartDist = 1e9f;
+    for (int i = 0; i < navNodeCount; i++) {
+        float d = Vector2Distance(current, navNodes[i]);
+        if (d < bestStartDist && HasLOS(current, navNodes[i], colliders, colliderCount)) {
+            bestStartDist = d;
+            startNode = i;
+        }
+    }
+    if (startNode == -1) startNode = 0; // Fallback if stuck
+
+    // 3. Find the nav node closest to the goal (end node)
+    int goalNode = -1;
+    float bestGoalDist = 1e9f;
+    for (int i = 0; i < navNodeCount; i++) {
+        float d = Vector2Distance(goal, navNodes[i]);
+        if (d < bestGoalDist && HasLOS(goal, navNodes[i], colliders, colliderCount)) {
+            bestGoalDist = d;
+            goalNode = i;
+        }
+    }
+    if (goalNode == -1) goalNode = 0;
+
+    // 4. Breadth-First-Search across the graph of visible nodes
+    int queue[128];     // MAX_NAV_NODES is 128
+    int parent[128];
+    bool visited[128] = {0};
+    int head = 0, tail = 0;
+
+    for (int i=0; i<128; i++) parent[i] = -1;
+
+    queue[tail++] = startNode;
+    visited[startNode] = true;
+
+    bool found = false;
+    while (head < tail) {
+        int u = queue[head++];
+        if (u == goalNode) {
+            found = true;
+            break;
+        }
+        
+        // Explore all siblings
+        for (int v = 0; v < navNodeCount; v++) {
+            if (!visited[v] && HasLOS(navNodes[u], navNodes[v], colliders, colliderCount)) {
+                visited[v] = true;
+                parent[v] = u;
+                queue[tail++] = v;
+            }
+        }
+    }
+
+    // 5. If we found a path, reconstruct it backwards, then reverse it
+    if (found) {
+        int tempPath[128];
+        int tempCount = 0;
+        int curr = goalNode;
+        
+        while (curr != -1) {
+            tempPath[tempCount++] = curr;
+            curr = parent[curr];
+        }
+
+        // Reverse into the enemy's path array (cap at 16 to fit in memory)
+        for (int i = 0; i < tempCount && i < 15; i++) {
+            e->navPath[i] = navNodes[tempPath[tempCount - 1 - i]];
+            e->navPathCount++;
+        }
+        // Finally, add the actual patrol waypoint as the absolute last step
+        e->navPath[e->navPathCount++] = goal;
+        e->navPathActive = true;
+    } else {
+        // Fallback: just walk to the goal directly if maze is broken
+        e->navPath[0] = goal;
+        e->navPathCount = 1;
+        e->navPathActive = true;
+    }
+}
+// Find the index of the nearest waypoint to the enemy's current position
+static int NearestWaypoint(const Enemy* e) {
+    Vector2 pos = EnemyCentre(e);
+    int best = 0;
+    float bestDist = Vector2Distance(pos, e->waypoints[0]);
+    for (int i = 1; i < e->waypointCount; i++) {
+        float d = Vector2Distance(pos, e->waypoints[i]);
+        if (d < bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // InitEnemy
 // ─────────────────────────────────────────────────────────────────────────────
 void InitEnemy(Enemy*       e,
@@ -204,6 +381,14 @@ void InitEnemy(Enemy*       e,
     e->state         = ENEMY_PATROL;
     e->hitStateTimer = 0.4f; // HIT state lasts 0.4 seconds by default
 
+    // ── Look-around defaults ──────────────────────────────────────────────────
+    e->lookAroundTimer = 0.0f;
+    e->lookBaseAngle   = 0.0f;
+    e->lookDir         = 1;
+
+    e->searchTimer     = 0.0f;
+    e->searchBaseAngle = 0.0f;
+
     // ── Sprite & animation ────────────────────────────────────────────────────
     e->frameWidth  = (frameWidth  > 0) ? frameWidth  : 32;
     e->frameHeight = (frameHeight > 0) ? frameHeight : 32;
@@ -218,15 +403,6 @@ void InitEnemy(Enemy*       e,
     }
 
     // ── Animation clip definitions ────────────────────────────────────────────
-    // Each clip references one or more rows in the sheet.
-    // Row layout assumed (change startRow to match YOUR sheet):
-    //   Row 0 = walk/idle row 0 (right)     }  idle & walk
-    //   Row 1 = walk/idle row 1 (left)      }  share the same rows
-    //   Row 2 = walk/idle row 2 (up)        }
-    //   Row 3 = walk/idle row 3 (down)      }
-    //   Row 4 = chase rows (same layout)    — set startRow=4 if different
-    //   Row 8 = hit  (single-row flash)
-    //   Row 9 = death
     e->clipIdle  = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.15f, .loops = true  };
     e->clipWalk  = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.10f, .loops = true  };
     e->clipChase = (EnemyAnimClip){ .startRow = 0, .frameCount = 1,  .frameDuration = 0.07f, .loops = true  };
@@ -268,7 +444,8 @@ void DamageEnemy(Enemy* e, float damage, Vector2 knockbackDir, float knockbackFo
 // UpdateEnemy
 // ─────────────────────────────────────────────────────────────────────────────
 void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
-                 Rectangle* colliders, int colliderCount) {
+                 Rectangle* colliders, int colliderCount,
+                 Vector2* navNodes, int navNodeCount) {
     if (outShake) *outShake = false;
 
     // ── Tick-down timers that run even while paused ────────────────────────────
@@ -322,11 +499,31 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
     // ── FSM Transitions ───────────────────────────────────────────────────────
     switch (e->state) {
         case ENEMY_PATROL:
-            if (playerVisible) e->state = ENEMY_CHASE;
+            if (playerVisible) {
+                e->state = ENEMY_CHASE;
+                e->navPathActive = false; // cancel any active nav path
+            }
             break;
+
         case ENEMY_CHASE:
-            if (distToPlayer > e->loseRange) e->state = ENEMY_PATROL;
+            // Track last known player position every frame while chasing
+            e->lastKnownPlayerPos = playerPos;
+            if (!playerVisible || distToPlayer > e->loseRange) {
+                // Lost the player → enter SEARCH state
+                e->state = ENEMY_SEARCH;
+                e->searchTimer = 2.0f; // look around for 2 seconds
+                e->searchBaseAngle = e->facingAngleDeg;
+                e->lookDir = 1;
+            }
             break;
+
+        case ENEMY_SEARCH:
+            // If we spot the player again during search, go back to chasing
+            if (playerVisible) {
+                e->state = ENEMY_CHASE;
+            }
+            break;
+
         default: break;
     }
 
@@ -341,18 +538,58 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
     switch (e->state) {
 
         case ENEMY_PATROL: {
-            // If waiting at waypoint, count down before resuming
+
+            // --- Following a nav-node path (returning from search) ---
+            if (e->navPathActive && e->navPathCount > 0) {
+                Vector2 navTarget = e->navPath[e->navPathCurrent];
+                if (MoveToward(e, navTarget, e->patrolSpeed, dt, colliders, colliderCount)) {
+                    // Arrived at this nav node — advance to next
+                    e->navPathCurrent++;
+                    if (e->navPathCurrent >= e->navPathCount) {
+                        // Reached the end of the nav path
+                        e->navPathActive = false;
+                        e->waypointIndex = NearestWaypoint(e);
+                    }
+                }
+                TickClip(e, &e->clipWalk, &e->animWalk, FacingRow(e), dt);
+                break;
+            }
+
+            // --- Normal waypoint patrol ---
+            // If waiting at waypoint, count down AND look around
             if (e->waitTimer > 0.0f) {
                 e->waitTimer -= dt;
-                TickClip(e, &e->clipIdle, &e->animIdle, dirRow, dt);
+
+                // ── Look-around sweep: rotate ±90° from arrival heading ──
+                float sweepSpeed = 67.0f; // degrees per second (slow, natural)
+                float sweepRange = 90.0f; // degrees from base in each direction
+
+                e->facingAngleDeg += (float)e->lookDir * sweepSpeed * dt;
+
+                // Compute angular difference from the base angle
+                float angleDiff = e->facingAngleDeg - e->lookBaseAngle;
+                while (angleDiff >  180.0f) angleDiff -= 360.0f;
+                while (angleDiff < -180.0f) angleDiff += 360.0f;
+
+                if (angleDiff >= sweepRange) {
+                    e->facingAngleDeg = e->lookBaseAngle + sweepRange;
+                    e->lookDir = -1; // reverse toward left
+                } else if (angleDiff <= -sweepRange) {
+                    e->facingAngleDeg = e->lookBaseAngle - sweepRange;
+                    e->lookDir = 1;  // reverse toward right
+                }
+
+                TickClip(e, &e->clipIdle, &e->animIdle, FacingRow(e), dt);
                 break;
             }
 
             // Ping-pong between waypoints
             Vector2 target = e->waypoints[e->waypointIndex];
             if (MoveToward(e, target, e->patrolSpeed, dt, colliders, colliderCount)) {
-                // Arrived at waypoint — pause 2 seconds before turning
-                e->waitTimer = 2.0f;
+                // Arrived at waypoint — store arrival heading and pause
+                e->lookBaseAngle = e->facingAngleDeg;
+                e->lookDir = 1;  // start by sweeping right from arrival heading
+                e->waitTimer = 6.0f;  // 5 seconds of looking around
                 e->waypointIndex += e->patrolDir;
                 if (e->waypointIndex >= e->waypointCount) {
                     e->waypointIndex = e->waypointCount - 2; // Bounce back
@@ -372,6 +609,39 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
             MoveToward(e, playerPos, e->chaseSpeed, dt, colliders, colliderCount);
             TickClip(e, &e->clipChase, &e->animChase, dirRow, dt);
             break;
+
+        case ENEMY_SEARCH: {
+            // ── Look-around sweep (~2 seconds), then go back to patrol ──
+            e->searchTimer -= dt;
+
+            // Sweep the vision cone ±60° around the last known heading
+            float sweepSpeed = 120.0f; // degrees per second (faster than patrol)
+            float sweepRange = 60.0f;
+
+            e->facingAngleDeg += (float)e->lookDir * sweepSpeed * dt;
+
+            float angleDiff = e->facingAngleDeg - e->searchBaseAngle;
+            while (angleDiff >  180.0f) angleDiff -= 360.0f;
+            while (angleDiff < -180.0f) angleDiff += 360.0f;
+
+            if (angleDiff > sweepRange) {
+                e->facingAngleDeg = e->searchBaseAngle + sweepRange;
+                e->lookDir = -1;
+            } else if (angleDiff < -sweepRange) {
+                e->facingAngleDeg = e->searchBaseAngle - sweepRange;
+                e->lookDir = 1;
+            }
+
+            TickClip(e, &e->clipIdle, &e->animIdle, FacingRow(e), dt);
+
+            if (e->searchTimer <= 0.0f) {
+                // Search is over — build a nav-node path back to nearest waypoint
+                e->state = ENEMY_PATROL;
+                e->waypointIndex = NearestWaypoint(e);
+                BuildNavPath(e, e->waypoints[e->waypointIndex], navNodes, navNodeCount, colliders, colliderCount);
+            }
+            break;
+        }
 
         default: break;
     }
@@ -404,9 +674,10 @@ void DrawEnemy(Enemy* e) {
         DrawTexturePro(*e->currentSprite, e->frameRec, dest, (Vector2){0,0}, 0.0f, tint);
     } else {
         // Placeholder: colour encodes state
-        Color base = (e->state == ENEMY_PATROL) ? (Color){60, 120, 220, 255}  :  // Blue
-                     (e->state == ENEMY_CHASE)  ? (Color){220, 80, 30, 255}   :  // Orange
-                     (e->state == ENEMY_HIT)    ? (Color){255, 50, 50, 255}   :  // Red
+        Color base = (e->state == ENEMY_PATROL)  ? (Color){60, 120, 220, 255}  :  // Blue
+                     (e->state == ENEMY_CHASE)   ? (Color){220, 80, 30, 255}   :  // Orange
+                     (e->state == ENEMY_SEARCH)  ? (Color){220, 200, 30, 255}  :  // Yellow (searching)
+                     (e->state == ENEMY_HIT)     ? (Color){255, 50, 50, 255}   :  // Red
                                                    (Color){80, 80, 80, 255};       // Grey dead
         // Flash override
         if (e->flashTimer > 0.0f && e->state != ENEMY_DEAD) base = RED;
@@ -418,7 +689,8 @@ void DrawEnemy(Enemy* e) {
         Vector2 centre = EnemyCentre(e);
         float startAngle = (e->facingAngleDeg - e->visionAngle) * DEG2RAD;
         float endAngle   = (e->facingAngleDeg + e->visionAngle) * DEG2RAD;
-        Color coneColor  = (e->state == ENEMY_CHASE) ? Fade(ORANGE, 0.20f)
+        Color coneColor  = (e->state == ENEMY_CHASE)  ? Fade(ORANGE, 0.20f)
+                         : (e->state == ENEMY_SEARCH) ? Fade(YELLOW, 0.25f)
                                                       : Fade(YELLOW, 0.12f);
         Color edgeColor  = Fade(YELLOW, 0.4f);
 

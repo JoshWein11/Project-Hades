@@ -34,6 +34,21 @@ static int   enemyCount = 0;
 static float shakeTimer     = 0.0f;
 static float shakeMagnitude = 0.0f;
 
+// ── Lives & death state ───────────────────────────────────────────────────────
+#define STARTING_LIVES 5
+static int   playerLives    = STARTING_LIVES;
+static bool  isPlayerDead   = false;
+static float deathTimer     = 0.0f;
+static bool  isGameOver     = false;
+static float deathFadeAlpha = 0.0f;
+
+// Spawn point for the current chapter (used for respawn)
+static Vector2 chapterSpawnPos = { 600, 867 };
+
+// Act/chapter tracking
+static int currentAct     = 0;
+static int currentChapter  = 0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: trigger a camera shake
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +91,16 @@ void InitScreenGameplay(void)
 
     enemyCount = 0;
     isPaused = false;
+
+    // Reset lives & death state
+    playerLives    = STARTING_LIVES;
+    isPlayerDead   = false;
+    deathTimer     = 0.0f;
+    isGameOver     = false;
+    deathFadeAlpha = 0.0f;
+    chapterSpawnPos = (Vector2){ 600, 867 }; // Current chapter spawn
+    currentAct     = 0;
+    currentChapter = 0;
 
     // Helper macro to easily spawn an enemy that patrols between two points
     #define SPAWN_BASIC_ENEMY(x1, y1, x2, y2) \
@@ -139,8 +164,11 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
     Vector2 mouseWorldPos = GetScreenToWorld2D(GetVirtualMouse(), camera);
 
-    // ── Player ────────────────────────────────────────────────────────────────
-    UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
+    // ── Core Gameplay Logic (Freeze during death) ─────────────────────────────
+    if (!isPlayerDead && !isGameOver) {
+        
+        // ── Player ────────────────────────────────────────────────────────────
+        UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
 
     Vector2 playerCentre = {
         player.position.x + (player.frameRec.width  * player.scale) * 0.5f,
@@ -151,7 +179,8 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     for (int i = 0; i < enemyCount; i++) {
         bool shakeThisFrame = false;
         UpdateEnemy(&enemies[i], playerCentre, dt, &shakeThisFrame,
-                    map.collisionRecs, map.collisionCount);
+                    map.collisionRecs, map.collisionCount,
+                    map.navNodes, map.navNodeCount);
         if (shakeThisFrame) TriggerShake(5.0f, 0.15f);
 
         if (enemies[i].state != ENEMY_DEAD) {
@@ -199,9 +228,75 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     // ── Weapons / bullets ─────────────────────────────────────────────────────
     UpdateWeapon(&playerWeapon, dt, map.collisionRecs, map.collisionCount);
 
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-        Vector2 startPos = { playerCentre.x, playerCentre.y };
-        ShootWeapon(&playerWeapon, startPos, mouseWorldPos);
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            Vector2 startPos = { playerCentre.x, playerCentre.y };
+            ShootWeapon(&playerWeapon, startPos, mouseWorldPos);
+        }
+    } // End Core Gameplay Logic
+
+    // ── Player death check ───────────────────────────────────────────────────────
+    if (!isPlayerDead && !isGameOver && player.health <= 0.0f) {
+        isPlayerDead   = true;
+        deathTimer     = 3.0f;
+        deathFadeAlpha = 0.0f;
+        playerLives--;
+    }
+
+    // ── Death overlay countdown ───────────────────────────────────────────────────
+    if (isPlayerDead) {
+        deathFadeAlpha += dt * 1.5f;
+        if (deathFadeAlpha > 1.0f) deathFadeAlpha = 1.0f;
+
+        deathTimer -= dt;
+        if (deathTimer <= 0.0f) {
+            if (playerLives <= 0) {
+                isGameOver   = true;
+                isPlayerDead = false;
+            } else {
+                // Respawn at chapter start
+                isPlayerDead = false;
+                player.position = chapterSpawnPos;
+                player.health   = player.maxHealth;
+                player.hitInvincibleTimer = 1.5f;
+
+                // Reset all enemies
+                for (int i = 0; i < enemyCount; i++) {
+                    enemies[i].health = enemies[i].maxHealth;
+                    enemies[i].state  = ENEMY_PATROL;
+                    enemies[i].position = enemies[i].waypoints[0];
+                    enemies[i].waypointIndex = 0;
+                    enemies[i].navPathActive = false;
+                }
+            }
+        }
+        return GAMEPLAY;
+    }
+
+    // ── Game Over screen — wait for RESTART button ───────────────────────────
+    if (isGameOver) {
+        Vector2 mousePoint = GetVirtualMouse();
+        float centerX = VIRTUAL_WIDTH / 2.0f;
+        float centerY = VIRTUAL_HEIGHT / 2.0f;
+        Rectangle restartBtn = { centerX - 120, centerY + 40, 240, 55 };
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+            CheckCollisionPointRec(mousePoint, restartBtn)) {
+            isGameOver     = false;
+            playerLives    = STARTING_LIVES;
+            deathFadeAlpha = 0.0f;
+            player.position = chapterSpawnPos; // Back to act start logic would go here
+            player.health   = player.maxHealth;
+            player.hitInvincibleTimer = 1.5f;
+
+            for (int i = 0; i < enemyCount; i++) {
+                enemies[i].health = enemies[i].maxHealth;
+                enemies[i].state  = ENEMY_PATROL;
+                enemies[i].position = enemies[i].waypoints[0];
+                enemies[i].waypointIndex = 0;
+                enemies[i].navPathActive = false;
+            }
+        }
+        return GAMEPLAY;
     }
 
     // ── Screen shake decay ────────────────────────────────────────────────────
@@ -236,6 +331,11 @@ void DrawScreenGameplay(void)
     DrawText("WASD / Arrows: Move  |  LMB: Shoot  |  ESC: Pause",
              10, 10, 14, DARKGRAY);
 
+    // Lives counter in the top right
+    const char* hudLivesText = TextFormat("Lives: %d", playerLives);
+    int hudLivesW = MeasureText(hudLivesText, 20);
+    DrawText(hudLivesText, VIRTUAL_WIDTH - hudLivesW - 20, 15, 20, MAROON);
+
     if (isPaused) {
         DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.6f));
         DrawText("PAUSED", VIRTUAL_WIDTH / 2 - MeasureText("PAUSED", 40) / 2, VIRTUAL_HEIGHT / 2 - 150, 40, RAYWHITE);
@@ -263,6 +363,63 @@ void DrawScreenGameplay(void)
         DrawRectangleLinesEx(exitBtn, 2, DARKGRAY);
         DrawText("EXIT TO MENU", (int)centerX - MeasureText("EXIT TO MENU", 20) / 2, (int)(exitBtn.y + 15), 20, DARKGRAY);
     }
+
+    // ── Death overlay ─────────────────────────────────────────────────────────────
+    if (isPlayerDead) {
+        // Dark red fade-in overlay
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT,
+                      Fade((Color){40, 0, 0, 255}, deathFadeAlpha * 0.85f));
+
+        // "YOU DIED" text
+        const char* deathText = "YOU DIED";
+        int deathFontSize = 60;
+        int deathTextW = MeasureText(deathText, deathFontSize);
+        Color textColor = Fade(RED, deathFadeAlpha);
+        DrawText(deathText, VIRTUAL_WIDTH / 2 - deathTextW / 2,
+                 VIRTUAL_HEIGHT / 2 - 60, deathFontSize, textColor);
+
+        // Lives remaining
+        if (playerLives > 0) {
+            const char* livesText = TextFormat("Lives remaining: %d", playerLives);
+            int livesW = MeasureText(livesText, 24);
+            DrawText(livesText, VIRTUAL_WIDTH / 2 - livesW / 2,
+                     VIRTUAL_HEIGHT / 2 + 20, 24, Fade(RAYWHITE, deathFadeAlpha));
+        } else {
+            const char* noLives = "No lives remaining...";
+            int nlW = MeasureText(noLives, 24);
+            DrawText(noLives, VIRTUAL_WIDTH / 2 - nlW / 2,
+                     VIRTUAL_HEIGHT / 2 + 20, 24, Fade(GRAY, deathFadeAlpha));
+        }
+    }
+
+    // ── Game Over screen ─────────────────────────────────────────────────────────
+    if (isGameOver) {
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.9f));
+
+        float centerX = VIRTUAL_WIDTH / 2.0f;
+        float centerY = VIRTUAL_HEIGHT / 2.0f;
+
+        // "GAME OVER" heading
+        const char* goText = "GAME OVER";
+        int goFontSize = 60;
+        int goW = MeasureText(goText, goFontSize);
+        DrawText(goText, (int)(centerX) - goW / 2, (int)(centerY) - 80, goFontSize, RED);
+
+        // Sub-text
+        const char* subText = "All lives lost";
+        int subW = MeasureText(subText, 20);
+        DrawText(subText, (int)(centerX) - subW / 2, (int)(centerY) - 10, 20, GRAY);
+
+        // RESTART button
+        Vector2 mousePoint = GetVirtualMouse();
+        Rectangle restartBtn = { centerX - 120, centerY + 40, 240, 55 };
+        bool hovered = CheckCollisionPointRec(mousePoint, restartBtn);
+        DrawRectangleRec(restartBtn, hovered ? (Color){200, 50, 50, 255} : (Color){150, 30, 30, 255});
+        DrawRectangleLinesEx(restartBtn, 2, RED);
+        const char* btnText = "RESTART";
+        int btnW = MeasureText(btnText, 28);
+        DrawText(btnText, (int)(centerX) - btnW / 2, (int)(restartBtn.y + 14), 28, RAYWHITE);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +442,11 @@ void GetGameplaySaveData(SaveData* data)
     data->playerHealth  = player.health;
     data->playerStamina = player.stamina;
 
+    // Progression
+    data->lives          = playerLives;
+    data->currentAct     = currentAct;
+    data->currentChapter = currentChapter;
+
     data->enemyCount = enemyCount;
     for (int i = 0; i < enemyCount && i < SAVE_MAX_ENEMIES; i++) {
         data->enemyX[i]      = enemies[i].position.x;
@@ -303,6 +465,19 @@ void RestoreGameplayFromSave(const SaveData* data)
     player.position.y = data->playerY;
     player.health     = data->playerHealth;
     player.stamina    = data->playerStamina;
+
+    // Progression
+    playerLives    = data->lives;
+    if (playerLives <= 0) playerLives = STARTING_LIVES; // Fallback for older saves
+    
+    currentAct     = data->currentAct;
+    currentChapter = data->currentChapter;
+
+    // Reset death states on load
+    isPlayerDead   = false;
+    isGameOver     = false;
+    deathTimer     = 0.0f;
+    deathFadeAlpha = 0.0f;
 
     for (int i = 0; i < data->enemyCount && i < enemyCount; i++) {
         enemies[i].position.x = data->enemyX[i];

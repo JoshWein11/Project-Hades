@@ -7,8 +7,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants — tweak these to tune the global feel of all enemies
 // ─────────────────────────────────────────────────────────────────────────────
-#define ENEMY_MAX_WAYPOINTS  8    // Maximum patrol stops per enemy
-#define ENEMY_MAX_PARTICLES  24   // Hit-burst particles per enemy
+#define ENEMY_MAX_WAYPOINTS   8    // Maximum patrol stops per enemy
+#define ENEMY_MAX_PARTICLES   24   // Hit-burst particles per enemy
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnemyState — the four states in the finite state machine
@@ -16,6 +16,7 @@
 typedef enum {
     ENEMY_PATROL,   // Walking between waypoints
     ENEMY_CHASE,    // Pursuing the player
+    ENEMY_SEARCH,   // Lost the player — looking around before returning
     ENEMY_HIT,      // Brief stun after taking damage
     ENEMY_DEAD      // Playing death animation, no longer moves
 } EnemyState;
@@ -95,6 +96,22 @@ typedef struct {
     float      hitStateTimer;    // How long to stay in HIT state
     float      waitTimer;        // Counts down at waypoint before resuming patrol
 
+    // ── Patrol look-around ────────────────────────────────────────────────────
+    float      lookAroundTimer;  // Counts down during waypoint idle sweep
+    float      lookBaseAngle;    // The angle the enemy arrived at the waypoint
+    int        lookDir;          // +1 or -1, alternates sweep direction
+
+    // ── Search state (lost-player) ────────────────────────────────────────────
+    float      searchTimer;      // Counts down while searching (~2 s)
+    float      searchBaseAngle;  // Heading when player was last seen
+    Vector2    lastKnownPlayerPos; // Where the player was last spotted
+
+    // ── Nav-node return path (SEARCH → PATROL) ────────────────────────────────
+    Vector2    navPath[16];       // Sequence of nav nodes to follow back
+    int        navPathCount;      // How many nodes in the path
+    int        navPathCurrent;    // Which node we are walking toward now
+    bool       navPathActive;     // True while following a nav path
+
     // ── Sprite / animation ────────────────────────────────────────────────────
     Texture2D      spriteRight;  // Texture for facing right
     Texture2D      spriteLeft;   // Texture for facing left
@@ -162,7 +179,8 @@ void InitEnemy(Enemy*      e,
 //   colliders      : Array of wall collision rectangles (from MapData).
 //   colliderCount  : Number of entries in colliders.
 void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
-                 Rectangle* colliders, int colliderCount);
+                 Rectangle* colliders, int colliderCount,
+                 Vector2* navNodes, int navNodeCount);
 
 // Draws the enemy sprite (or placeholder), health bar, vision cone (debug), and particles.
 void DrawEnemy(Enemy* e);

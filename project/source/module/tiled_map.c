@@ -12,24 +12,37 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->spritesheet = LoadTexture("../assets/images/tileset/spritesheet.png");
     mapData->SciFi = LoadTexture("../assets/images/tileset/SciFi.png");
     mapData->collisionCount = 0;
+    mapData->navNodeCount   = 0;
 
     if (mapData->map) {
         cute_tiled_layer_t* layer = mapData->map->layers;
         while (layer) {
             if (layer->type.ptr && strcmp(layer->type.ptr, "objectgroup") == 0) {
-                cute_tiled_object_t* obj = layer->objects;
-                //Load Collision Recs
-                while (obj && mapData->collisionCount < MAX_COLLISION_RECS) {
-                    mapData->collisionRecs[mapData->collisionCount].x = obj->x; //Collision Recs X
-                    mapData->collisionRecs[mapData->collisionCount].y = obj->y; //Collision Recs Y
-                    mapData->collisionRecs[mapData->collisionCount].width = obj->width; //Collision Recs Width
-                    mapData->collisionRecs[mapData->collisionCount].height = obj->height; //Collision Recs Height
-                    mapData->collisionCount++;
-                    obj = obj->next;
+
+                // ── NavNodes layer → load as navigation waypoints ─────────
+                if (layer->name.ptr && strcmp(layer->name.ptr, "NavNodes") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->navNodeCount < MAX_NAV_NODES) {
+                        mapData->navNodes[mapData->navNodeCount] = (Vector2){ obj->x, obj->y };
+                        mapData->navNodeCount++;
+                        obj = obj->next;
+                    }
+                } else {
+                    // ── All other object layers → load as collision recs ───
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->collisionCount < MAX_COLLISION_RECS) {
+                        mapData->collisionRecs[mapData->collisionCount].x = obj->x;
+                        mapData->collisionRecs[mapData->collisionCount].y = obj->y;
+                        mapData->collisionRecs[mapData->collisionCount].width = obj->width;
+                        mapData->collisionRecs[mapData->collisionCount].height = obj->height;
+                        mapData->collisionCount++;
+                        obj = obj->next;
+                    }
                 }
             }
-            layer = layer->next; //Next Layer
+            layer = layer->next;
         }
+        printf("[Map] Loaded %d collision recs, %d nav nodes\n", mapData->collisionCount, mapData->navNodeCount);
     } else {
         printf("Failed to load map %s. Reason: %s\n", jsonPath, cute_tiled_error_reason);
     }

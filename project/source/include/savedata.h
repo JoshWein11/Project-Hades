@@ -24,6 +24,11 @@ typedef struct {
     int   currentScreen;    // Which GameScreen to restore to
     int   dialogueIndex;    // Which dialogue entry the player reached
     bool  dialogueFinished; // True if dialogue was fully completed
+
+    // Lives & Act/Chapter progression
+    int   lives;            // Remaining lives (starts at 5)
+    int   currentAct;       // Which Act the player is in (0-based)
+    int   currentChapter;   // Which Chapter within the Act (0-based)
 } SaveData;
 
 // Writes the SaveData struct to a binary file. Returns true on success.
