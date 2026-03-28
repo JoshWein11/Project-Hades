@@ -3,9 +3,10 @@
 *.a
 *.exe
 game.exe
+savegame.dat
 
 # Ignore VS/IDE files
 .vscode/
 *.swp
 
-# Do not ignore source/assets
+!libraylib.a
