@@ -1,4 +1,4 @@
-#include "character.h"
+#include "character.h" //Code Written by: Josh Weinrich
 #include "setting.h"
 #include <stdbool.h>
 #include <math.h>     // For powf, sqrtf
@@ -16,9 +16,9 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->velocity = (Vector2){ 0.0f, 0.0f };  // Start with no movement
 
     // Movement tuning values
-    player->maxSpeed     = 200.0f;   // Pixels per second cap
-    player->acceleration = 1000.0f;  // How snappily the player reaches max speed
-    player->friction     = 1000.0f;  // How quickly the player stops when no key is held
+    player->maxSpeed     = 175.0f;   // Pixels per second cap
+    player->acceleration = 500.0f;  // How snappily the player reaches max speed
+    player->friction     = 500.0f;  // How quickly the player stops when no key is held
     player->scale        = 1.2f;     // Scale sprite up 1.5× from its native 32×32 size
 
     // Load sprite sheet from disk and store the column / row counts
@@ -34,13 +34,13 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
 
     player->currentFrame   = 0;  // Begin on the first animation frame
     player->framesCounter  = 0;  // No elapsed ticks yet
-    player->framesSpeed    = 6;  // Advance one animation frame every 60/8 = 7-8 game frames
+    player->framesSpeed    = 6;  // Advance one animation frame every 60/6 = 10 game frames
     player->movingDirection = 0; // Default facing: right (row 0)
 
     // Dash Variables Init
     player->isDashing      = false;           // Not dashing at start
     player->dashDir        = (Vector2){0.0f, 0.0f}; // No dash direction yet
-    player->dashSpeed      = 1000.0f;         // Pixels per second at the peak of a dash
+    player->dashSpeed      = 500.0f;         // Pixels per second at the peak of a dash
     player->dashDuration   = 0.25f;           // Dash lasts 0.25 seconds
     player->dashTime       = 0.0f;            // No time remaining on a dash
     player->dashProgress   = 0.0f;            // 0 = start of dash, 1 = end of dash
@@ -268,7 +268,7 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
             if (player->currentFrame >= player->frames) player->currentFrame = 0;
 
             // Play a footstep sound every 2th animation frame to sync with the walk cycle
-            if (gameAudio != NULL && (player->currentFrame % 2 == 0)) {
+            if (gameAudio != NULL && (player->currentFrame % 3 == 0)) {
                 PlayRandomFootstep(gameAudio);
             }
 

@@ -37,18 +37,6 @@ CONTROLS
 
   Quit           Close the window or press Alt + F4
 
-
-FILES
------
-The folder should look like this after extracting:
-
-  game.exe          <-- Double-click to launch the game
-  assets/           <-- Contains all images, sounds, and data
-
-IMPORTANT: The  assets  folder must stay in the same folder at all times. Moving or deleting it will cause the
-game to fail to load.
-
-
 REQUIREMENTS
 ------------
   Operating System:  Windows 10 or later (64-bit) !!

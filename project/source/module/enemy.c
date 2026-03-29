@@ -1,4 +1,4 @@
-#include "enemy.h"
+#include "enemy.h" //Code Written by: Josh Weinrich
 #include "raymath.h"
 #include <math.h>
 #include <stdlib.h>
@@ -19,7 +19,7 @@ static bool MoveToward(Enemy* e, Vector2 target, float speed, float dt,
     float dist = Vector2Length(diff);
     // Increased arrival radius to 16.0f to prevent stuttering when whiskers push away from walls
     if (dist < 16.0f) {
-        // e->position = target; // Removed snapping to prevent jerky movement
+        e->position = target; // Removed snapping to prevent jerky movement
         return true;
     }
 
