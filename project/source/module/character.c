@@ -16,9 +16,9 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->velocity = (Vector2){ 0.0f, 0.0f };  // Start with no movement
 
     // Movement tuning values
-    player->maxSpeed     = 175.0f;   // Pixels per second cap
-    player->acceleration = 500.0f;  // How snappily the player reaches max speed
-    player->friction     = 500.0f;  // How quickly the player stops when no key is held
+    player->maxSpeed     = 200.0f;   // Pixels per second cap
+    player->acceleration = 700.0f;  // How snappily the player reaches max speed
+    player->friction     = 700.0f;  // How quickly the player stops when no key is held
     player->scale        = 1.2f;     // Scale sprite up 1.5× from its native 32×32 size
 
     // Load sprite sheet from disk and store the column / row counts

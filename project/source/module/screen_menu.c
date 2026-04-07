@@ -4,10 +4,18 @@
 #include "savedata.h"
 
 static Texture2D menuLogo;
+static Texture2D menuAnim;
+static float animTimer = 0.0f;
+static int currentFrame = 0;
+#define MENU_ANIM_FRAMES 11
+#define MENU_ANIM_FPS 10.0f
 
 void InitScreenMenu(void)
 {
     menuLogo = LoadTexture("../assets/images/menu.png"); //Load Menu Logo from Assets
+    menuAnim = LoadTexture("../assets/images/menu_animation.qoi");
+    animTimer = 0.0f;
+    currentFrame = 0;
 }
 
 GameScreen UpdateScreenMenu(void)
@@ -15,6 +23,13 @@ GameScreen UpdateScreenMenu(void)
     Vector2 mousePoint = GetVirtualMouse();
     float centerX = VIRTUAL_WIDTH / 2.0f;
     float centerY = VIRTUAL_HEIGHT / 2.0f;
+    
+    // Update background animation
+    animTimer += GetFrameTime();
+    if (animTimer >= (1.0f / MENU_ANIM_FPS)) {
+        animTimer = 0.0f;
+        currentFrame = (currentFrame + 1) % MENU_ANIM_FRAMES;
+    }
     
     //Make buttons in the main menu
     Rectangle startBtn    = { centerX - 100, centerY - 10, 200, 50 };
@@ -54,6 +69,16 @@ void DrawScreenMenu(void) //Draw the Screen
 
     bool hasSave = SaveFileExists(SAVE_FILEPATH);
 
+    // Draw background animation (scaled to fill screen)
+    if (menuAnim.id != 0) {
+        int frameHeight = menuAnim.height / MENU_ANIM_FRAMES;
+        Rectangle sourceRec = { 0, (float)(currentFrame * frameHeight), (float)menuAnim.width, (float)frameHeight };
+        Rectangle destRec = { 0, 0, (float)VIRTUAL_WIDTH, (float)VIRTUAL_HEIGHT };
+        DrawTexturePro(menuAnim, sourceRec, destRec, (Vector2){0, 0}, 0.0f, WHITE);
+    } else {
+        ClearBackground(RAYWHITE);
+    }
+
     // Draw menu logo scaled 1.67x, centered
     float logoScale = 1.67f;
     int scaledWidth = (int)(menuLogo.width * logoScale);
@@ -90,4 +115,5 @@ void DrawScreenMenu(void) //Draw the Screen
 void UnloadScreenMenu(void)
 {
     UnloadTexture(menuLogo);
+    UnloadTexture(menuAnim);
 }

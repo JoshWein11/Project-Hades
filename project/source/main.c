@@ -34,7 +34,6 @@ int main(void)
     // Initialize all screens
     InitScreenSplash();
     InitScreenMenu();
-    InitScreenDialogue("../assets/dialogue/opening.txt");
     InitScreenGameplay();
     
     GameScreen currentScreen = SPLASH;
@@ -87,7 +86,7 @@ int main(void)
                 if (currentScreen == SETTINGS) previousScreen = MAIN_MENU;
                 // "Start" was pressed — reset dialogue and gameplay for a fresh run
                 if (currentScreen == DIALOGUE) {
-                    ResetScreenDialogue();
+                    LoadDialogueFile("../assets/dialogue/opening.txt");
                     InitScreenGameplay();
                 }
                 break;

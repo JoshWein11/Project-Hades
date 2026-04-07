@@ -70,7 +70,6 @@ typedef struct {
 
     // ── Position / Physics ────────────────────────────────────────────────────
     Vector2    position;         // Top-left of the sprite (world space)
-    Vector2    knockbackVel;     // Decays to zero; applied when hit
     float      patrolSpeed;      // px/s while patrolling
     float      chaseSpeed;       // px/s while chasing
 
@@ -158,15 +157,15 @@ typedef struct {
 //   spawnPos       : Starting position (world space, top-left of sprite).
 //   waypoints      : Array of patrol waypoints; first entry should equal spawnPos.
 //   waypointCount  : Number of entries in the waypoints array (max ENEMY_MAX_WAYPOINTS).
-//   spritePath     : Path to a PNG sprite sheet, or NULL for a coloured rectangle.
+//   spriteR/L      : Pre-loaded textures for right/left facing. Pass (Texture2D){0} for placeholder.
 //   frameWidth/H   : Pixel size of one animation frame.
 //   scale          : Render scale (1.5 = 1.5× native size).
 void InitEnemy(Enemy*      e,
                Vector2     spawnPos,
                Vector2*    waypoints,
                int         waypointCount,
-               const char* spriteRightPath,
-               const char* spriteLeftPath,
+               Texture2D   spriteR,
+               Texture2D   spriteL,
                int         frameWidth,
                int         frameHeight,
                float       scale);
@@ -187,11 +186,16 @@ void DrawEnemy(Enemy* e);
 
 // Call when the player damages this enemy.
 //   damage         : Hit-points to subtract.
-//   knockbackDir   : Normalised direction away from the player.
-//   knockbackForce : px/s of instant velocity applied to the enemy.
-void DamageEnemy(Enemy* e, float damage, Vector2 knockbackDir, float knockbackForce);
+void DamageEnemy(Enemy* e, float damage);
+
+// Stun the enemy without dealing damage.
+// Puts the enemy into ENEMY_HIT state for the standard hit duration.
+void StunEnemy(Enemy* e);
 
 // Frees the GPU sprite texture (if one was loaded).
+// NOTE: Only call this if the enemy owns its textures (not shared).
+//       When using shared textures from SpawnEnemiesFromMap, the caller
+//       unloads the shared textures separately.
 void UnloadEnemy(Enemy* e);
 
 // Returns the world-space centre of the enemy's sprite rectangle.

@@ -38,7 +38,7 @@ void DrawScreenSplash(void)
         DrawTextureEx(splashLogo, 
             (Vector2){ VIRTUAL_WIDTH / 2.0f - (splashLogo.width * scale) / 2.0f, 
                        VIRTUAL_HEIGHT / 2.0f - (splashLogo.height * scale) / 2.0f },
-            0.0f, scale, Fade(WHITE, alpha));
+            0.0f, scale, Fade(RAYWHITE, alpha));
     } else {
         //Draw Text if no Logo incase the logo is not loaded
         int textWidth = MeasureText("YOUR LOGO HERE", 60);

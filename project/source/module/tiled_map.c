@@ -6,13 +6,17 @@
 //Load Tiled Map from JSON file and Texture from Assets
 void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->map = cute_tiled_load_map_from_file(jsonPath, NULL);
-    mapData->tilesetx1 = LoadTexture("../assets/images/tileset/tilesetx1.png");
+    mapData->tilesetx1 = LoadTexture("../assets/images/tileset/tileset x1.png");
     mapData->labtileset = LoadTexture("../assets/images/tileset/labtileset.png");
     mapData->tube = LoadTexture("../assets/images/tileset/tube.png");
     mapData->spritesheet = LoadTexture("../assets/images/tileset/spritesheet.png");
     mapData->SciFi = LoadTexture("../assets/images/tileset/SciFi.png");
+    mapData->stage2tileset = LoadTexture("../assets/images/tileset/stage 2 tileset.png");
     mapData->collisionCount = 0;
     mapData->navNodeCount   = 0;
+    mapData->enemySpawnCount = 0;
+    mapData->hasNextActTrigger = false;
+    mapData->hasSpawnPoint = false;
 
     if (mapData->map) {
         cute_tiled_layer_t* layer = mapData->map->layers;
@@ -26,6 +30,43 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
                         mapData->navNodes[mapData->navNodeCount] = (Vector2){ obj->x, obj->y };
                         mapData->navNodeCount++;
                         obj = obj->next;
+                    }
+                }
+                // ── Enemy layer → load as spawn points with patrol groups ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "Enemy") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->enemySpawnCount < MAX_ENEMY_SPAWNS) {
+                        EnemySpawnPoint* sp = &mapData->enemySpawns[mapData->enemySpawnCount];
+                        sp->position = (Vector2){ obj->x, obj->y };
+                        // Copy name — empty string if unnamed
+                        if (obj->name.ptr && strlen(obj->name.ptr) > 0) {
+                            strncpy(sp->group, obj->name.ptr, 15);
+                            sp->group[15] = '\0';
+                        } else {
+                            sp->group[0] = '\0';
+                        }
+                        mapData->enemySpawnCount++;
+                        obj = obj->next;
+                    }
+                }
+                // ── Next ACT Trigger layer ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "Next ACT") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    if (obj) { // Just take the first object in the layer
+                        mapData->nextActTrigger.x = obj->x;
+                        mapData->nextActTrigger.y = obj->y;
+                        mapData->nextActTrigger.width = obj->width;
+                        mapData->nextActTrigger.height = obj->height;
+                        mapData->hasNextActTrigger = true;
+                    }
+                }
+                // ── Spawn layer ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "Spawn") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    if (obj) { // Just take the first object in the layer
+                        mapData->spawnPoint.x = obj->x;
+                        mapData->spawnPoint.y = obj->y;
+                        mapData->hasSpawnPoint = true;
                     }
                 } else {
                     // ── All other object layers → load as collision recs ───
@@ -42,7 +83,7 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
             }
             layer = layer->next;
         }
-        printf("[Map] Loaded %d collision recs, %d nav nodes\n", mapData->collisionCount, mapData->navNodeCount);
+        printf("[Map] Loaded %d collision recs, %d nav nodes, %d enemy spawns\n", mapData->collisionCount, mapData->navNodeCount, mapData->enemySpawnCount);
     } else {
         printf("Failed to load map %s. Reason: %s\n", jsonPath, cute_tiled_error_reason);
     }
@@ -68,24 +109,42 @@ void DrawTiledMap(MapData* mapData) {
                     
                     Texture2D tex = {0};
                     int firstgid = 0;
-                    if (gid >= 2362) { //Determine which tileset to use
-                        tex = mapData->spritesheet;
-                        firstgid = 2362;
-                    } else if (gid >= 1786) {
-                        tex = mapData->SciFi;
-                        firstgid = 1786;
-                    } else if (gid >= 1784) {
-                        tex = mapData->tube;
-                        firstgid = 1784;
-                    } else if (gid >= 1703) {
-                        tex = mapData->labtileset;
-                        firstgid = 1703;
-                    } else if (gid >= 1) {
-                        tex = mapData->tilesetx1;
-                        firstgid = 1;
-                    } else {
-                        //Ignore missing texture
-                        continue;
+                    cute_tiled_tileset_t* best_ts = NULL;
+                    cute_tiled_tileset_t* ts = mapData->map->tilesets;
+                    
+                    while (ts) {
+                        // Skip completely ghost/empty embedded tilesets (tilecount == 0)
+                        if (ts->image.ptr != NULL && ts->tilecount <= 0) {
+                            ts = ts->next;
+                            continue;
+                        }
+                        if (gid >= ts->firstgid) {
+                            if (!best_ts || ts->firstgid >= best_ts->firstgid) {
+                                best_ts = ts;
+                            }
+                        }
+                        ts = ts->next;
+                    }
+                    
+                    if (best_ts) {
+                        firstgid = best_ts->firstgid;
+                        const char* ts_ident = best_ts->image.ptr ? best_ts->image.ptr : 
+                                              (best_ts->source.ptr ? best_ts->source.ptr : 
+                                              (best_ts->name.ptr ? best_ts->name.ptr : ""));
+                                              
+                        if (strstr(ts_ident, "tileset x1") || strstr(ts_ident, "tilesetx1")) {
+                            tex = mapData->tilesetx1;
+                        } else if (strstr(ts_ident, "labtileset")) {
+                            tex = mapData->labtileset;
+                        } else if (strstr(ts_ident, "tube")) {
+                            tex = mapData->tube;
+                        } else if (strstr(ts_ident, "spritesheet")) {
+                            tex = mapData->spritesheet;
+                        } else if (strstr(ts_ident, "SciFi")) {
+                            tex = mapData->SciFi;
+                        } else if (strstr(ts_ident, "stage 2 tileset")) {
+                            tex = mapData->stage2tileset;
+                        }
                     }
                     
                     if (tex.id == 0) continue; // Safety check
@@ -118,4 +177,5 @@ void UnloadTiledMap(MapData* mapData) { //Unload Tiled Map
     UnloadTexture(mapData->tube);
     UnloadTexture(mapData->spritesheet);
     UnloadTexture(mapData->SciFi);
+    UnloadTexture(mapData->stage2tileset);
 }

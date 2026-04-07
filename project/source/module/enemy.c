@@ -346,8 +346,8 @@ void InitEnemy(Enemy*       e,
                Vector2      spawnPos,
                Vector2*     waypoints,
                int          waypointCount,
-               const char*  spriteRightPath,
-               const char*  spriteLeftPath,
+               Texture2D    spriteR,
+               Texture2D    spriteL,
                int          frameWidth,
                int          frameHeight,
                float        scale)
@@ -357,7 +357,7 @@ void InitEnemy(Enemy*       e,
     // ── Position / physics ────────────────────────────────────────────────────
     e->position     = spawnPos;
     e->patrolSpeed  = 80.0f;
-    e->chaseSpeed   = 167.0f;
+    e->chaseSpeed   = 130.0f;
 
     // ── Waypoints ─────────────────────────────────────────────────────────────
     waypointCount = (waypointCount < 1) ? 1 : 
@@ -395,11 +395,11 @@ void InitEnemy(Enemy*       e,
     e->scale       = (scale       > 0) ? scale       : 0.5f;
     e->frameRec    = (Rectangle){ 0, 0, (float)e->frameWidth, (float)e->frameHeight };
 
-    if (spriteRightPath != NULL && spriteLeftPath != NULL) {
-        e->spriteRight = LoadTexture(spriteRightPath);
-        e->spriteLeft  = LoadTexture(spriteLeftPath);
+    if (spriteR.id != 0 && spriteL.id != 0) {
+        e->spriteRight   = spriteR;
+        e->spriteLeft    = spriteL;
         e->currentSprite = &e->spriteRight;
-        e->hasSprite = true;
+        e->hasSprite     = true;
     }
 
     // ── Animation clip definitions ────────────────────────────────────────────
@@ -417,7 +417,7 @@ void InitEnemy(Enemy*       e,
 // ─────────────────────────────────────────────────────────────────────────────
 // DamageEnemy — called by the player when a hit lands
 // ─────────────────────────────────────────────────────────────────────────────
-void DamageEnemy(Enemy* e, float damage, Vector2 knockbackDir, float knockbackForce) {
+void DamageEnemy(Enemy* e, float damage) {
     if (e->state == ENEMY_DEAD) return;         // Already dead, ignore
     if (e->hitInvincibleTimer > 0.0f) return;   // In invincibility window
 
@@ -434,10 +434,25 @@ void DamageEnemy(Enemy* e, float damage, Vector2 knockbackDir, float knockbackFo
         e->hitStateTimer = 0.35f;
         e->flashTimer    = 0.35f;
         e->hitPauseTimer = 0.06f; // 60 ms freeze
-        e->knockbackVel  = Vector2Scale(knockbackDir, knockbackForce);
         ResetAnim(&e->animHit);
         SpawnParticles(e, ORANGE);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StunEnemy — stun without damage (used in Act 1)
+// ─────────────────────────────────────────────────────────────────────────────
+void StunEnemy(Enemy* e) {
+    if (e->state == ENEMY_DEAD) return;
+    if (e->hitInvincibleTimer > 0.0f) return;
+
+    e->hitInvincibleTimer = 0.5f;
+    e->state         = ENEMY_HIT;
+    e->hitStateTimer = 0.35f;
+    e->flashTimer    = 0.35f;
+    e->hitPauseTimer = 0.06f;
+    ResetAnim(&e->animHit);
+    SpawnParticles(e, YELLOW);  // Yellow particles to distinguish stun from damage
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -471,14 +486,6 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
     if (e->state == ENEMY_DEAD) {
         TickClip(e, &e->clipDeath, &e->animDeath, 0, dt);
         return;
-    }
-
-    // ── Knockback decay ───────────────────────────────────────────────────────
-    if (Vector2Length(e->knockbackVel) > 1.0f) {
-        e->position     = Vector2Add(e->position, Vector2Scale(e->knockbackVel, dt));
-        e->knockbackVel = Vector2Scale(e->knockbackVel, 0.80f); // Strong drag
-    } else {
-        e->knockbackVel = (Vector2){0};
     }
 
     // ── HIT state countdown ───────────────────────────────────────────────────
@@ -590,13 +597,17 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
                 e->lookBaseAngle = e->facingAngleDeg;
                 e->lookDir = 1;  // start by sweeping right from arrival heading
                 e->waitTimer = 6.0f;  // 5 seconds of looking around
-                e->waypointIndex += e->patrolDir;
-                if (e->waypointIndex >= e->waypointCount) {
-                    e->waypointIndex = e->waypointCount - 2; // Bounce back
-                    e->patrolDir     = -1;
-                } else if (e->waypointIndex < 0) {
-                    e->waypointIndex = 1;
-                    e->patrolDir     = 1;
+
+                // Only advance waypoint if there are multiple stops
+                if (e->waypointCount > 1) {
+                    e->waypointIndex += e->patrolDir;
+                    if (e->waypointIndex >= e->waypointCount) {
+                        e->waypointIndex = e->waypointCount - 2; // Bounce back
+                        e->patrolDir     = -1;
+                    } else if (e->waypointIndex < 0) {
+                        e->waypointIndex = 1;
+                        e->patrolDir     = 1;
+                    }
                 }
             }
             bool moving = Vector2Length(Vector2Subtract(target, e->position)) > 4.0f;
@@ -731,9 +742,7 @@ void DrawEnemy(Enemy* e) {
 // UnloadEnemy
 // ─────────────────────────────────────────────────────────────────────────────
 void UnloadEnemy(Enemy* e) {
-    if (e->hasSprite) {
-        UnloadTexture(e->spriteRight);
-        UnloadTexture(e->spriteLeft);
-        e->hasSprite = false;
-    }
+    // Textures are shared (loaded once, passed in) — do NOT unload them here.
+    // The caller (e.g. SetupAct) is responsible for unloading shared textures.
+    e->hasSprite = false;
 }

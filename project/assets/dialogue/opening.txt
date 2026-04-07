@@ -1,93 +1,128 @@
-CMD|BG|scene1.jpg
+CMD|CHAR|LYRA|lyra_l.png|lyra_r.png
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ELIAS|elias_l.png|elias_r.png
+CMD|CHAR|TECHNICIAN|tech.png|tech.png
+CMD|CHAR|ORION|orion.png|orion.png
+---
+CMD|TITLE|ACT 1 : The Catastrophe (Prologue)
+---
+CMD|BG|scene1.qoi
 CMD|BGM|bgm1.wav
 CMD|WAIT|1.0
 ---
-LYRA|lyra_l.png|left
+LYRA|left
 Dad, are those the monsters again?
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|right
 They're not monsters, Lyra. They're... breakthroughs
 ---
-LYRA|lyra_l.png|left
+LYRA|left
 They don't look like breakthroughs
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|right
 They will... we're just not there yet.
 ---
-CMD|BG|scene2.jpg
+CMD|BG|scene2.qoi
 CMD|BGM|bgm2.wav
 CMD|WAIT|1.0
 ---
-ELIAS|elias_l.png|left
+ELIAS|left
 Adrian, the readings are spiking.
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|right
 Good. That means it's adapting.
 ---
-TECHNICIAN|tech.png|left
+TECHNICIAN|left
 Containment field down three percent, Boss.
 ---
-ELIAS|elias_l.png|left
+ELIAS|left
 That's not good.
 ---
-ADRIAN|voss_r.png|right
+ADRIAN|right
 Start recalibrating. Now.
 ---
-TECHNICIAN|tech.png|left
+TECHNICIAN|left
 It's not taking any signals. Controls aren't responding!
 ---
-CMD|BG|scene3.jpg
+CMD|BG|scene3.qoi
 CMD|WAIT|0.5
 ---
-ELIAS|elias_r.png|right
+ELIAS|right
 Adrian, we're losing it!
 ---
-ADRIAN|voss_l.png|left
+ADRIAN|left
 Hold it steady!
 ---
-TECHNICIAN|tech.png|left
+TECHNICIAN|left
 Containment field at seventy percent-dropping fast!
 ---
-ELIAS|elias_r.png|right
+ELIAS|right
 Adrian, shut it down!
 ---
-ADRIAN|voss_l.png|left
+ADRIAN|left
 No, this is the breakthrough!
 ---
-CMD|BG|scene4(1).jpg
-CMD|WAIT|0.2
+CMD|ANIM|scene4_sheet.qoi|10|5
 ---
-CMD|BG|scene4(2).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(3).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(4).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(5).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(6).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(7).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(8).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(9).jpg
-CMD|WAIT|0.2
----
-CMD|BG|scene4(10).jpg
+CMD|BG|scene4.qoi
 CMD|WAIT|0.67
 ---
-CMD|BG|scene5.jpg
-CMD|SFX|glassbreak.wav
-CMD|WAIT|3.0
+ORION|left
+Containment failure detected. Biohazard protocol engaged
 ---
-
-
-
+LYRA|left
+Dad? What's happening?
+---
+ADRIAN|right
+Lyra, stay where you are. Do NOT move!
+---
+ELIAS|left
+It's breaking through!
+---
+CMD|BG|scene5.qoi
+CMD|SFX|glassbreak.wav
+CMD|WAIT|1.0
+---
+TECHNICIAN|left
+IT'S OUT!!
+---
+CMD|BG|scene6.qoi
+CMD|BGM|alarm.wav
+CMD|WAIT|1.0
+---
+ADRIAN|left
+Lyra! Follow me NOW!
+---
+ORION|left
+Emergency lockdown initiated. Sector isolation currently in progress.
+---
+ADRIAN|left
+No! Override the lockdown!
+---
+ORION|left
+Authorization denied.
+---
+LYRA|right
+DAD!
+---
+CMD|BG|scene7.qoi
+CMD|SFX|door_shut.wav
+CMD|WAIT|0.67
+---
+ADRIAN|left
+LYRA!!
+---
+ELIAS|right
+Adrian, we have to go. NOW!
+---
+ADRIAN|left
+She's still inside!
+---
+ELIAS|right
+We can't do anything about it now!
+---
+ADRIAN|left
+...
+---
+CMD|TITLE|Objective : Evacuate the Laboratory
+---

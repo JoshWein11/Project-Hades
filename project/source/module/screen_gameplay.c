@@ -8,13 +8,29 @@
 #include "setting.h"
 #include "enemy.h"
 #include "savedata.h"
+#include "screen_dialogue.h"
+#include <string.h>
+#include <stdio.h>
 
 static Character player;
 static MapData   map;
 static Weapon    playerWeapon;
 static Camera2D  camera = { 0 };
 
+// Shared enemy sprite textures — loaded once, used by all enemies
+static Texture2D enemySpriteR;
+static Texture2D enemySpriteL;
+
 static bool isPaused = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Objective System
+// ─────────────────────────────────────────────────────────────────────────────
+static bool objMoveDone = false;
+static bool objDashDone = false;
+static bool objShootDone = false;
+static bool objEvacuateDone = false;
+static bool displayObjectives = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy list — increase capacity and call InitEnemy multiple times to add more.
@@ -26,7 +42,7 @@ static bool isPaused = false;
 //     Replace NULL with a path string, e.g. "../assets/character/enemy.png",
 //     and set the correct frameWidth / frameHeight for your sprite sheet.
 // ─────────────────────────────────────────────────────────────────────────────
-#define MAX_ENEMIES 10
+#define MAX_ENEMIES 30
 static Enemy enemies[MAX_ENEMIES];
 static int   enemyCount = 0;
 
@@ -48,6 +64,7 @@ static Vector2 chapterSpawnPos = { 600, 867 };
 // Act/chapter tracking
 static int currentAct     = 0;
 static int currentChapter  = 0;
+static int pendingAct     = -1;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: trigger a camera shake
@@ -55,6 +72,119 @@ static int currentChapter  = 0;
 static void TriggerShake(float magnitude, float duration) {
     shakeMagnitude = magnitude;
     shakeTimer     = duration;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SpawnEnemiesFromMap — reads map.enemySpawns[] (parsed from the Tiled
+//   "Enemy" object layer) and calls InitEnemy for each enemy.
+//
+//   Unnamed points → stationary enemy (1 waypoint).
+//   Points with the same name → one enemy patrolling between those waypoints.
+// ─────────────────────────────────────────────────────────────────────────────
+static void SpawnEnemiesFromMap(void)
+{
+    bool processed[MAX_ENEMY_SPAWNS] = {0};
+
+    printf("[Enemy] Total spawn points from map: %d\n", map.enemySpawnCount);
+    for (int d = 0; d < map.enemySpawnCount; d++) {
+        printf("[Enemy]   spawn[%d] pos=(%.0f, %.0f) group='%s'\n",
+               d, map.enemySpawns[d].position.x, map.enemySpawns[d].position.y,
+               map.enemySpawns[d].group);
+    }
+
+    for (int i = 0; i < map.enemySpawnCount; i++) {
+        if (processed[i]) continue;
+
+        EnemySpawnPoint* sp = &map.enemySpawns[i];
+
+        if (sp->group[0] == '\0') {
+            // ── Stationary enemy: single waypoint ──────────────────────────
+            if (enemyCount < MAX_ENEMIES) {
+                Vector2 pts[] = { sp->position };
+                InitEnemy(&enemies[enemyCount++], sp->position, pts, 1,
+                    enemySpriteR, enemySpriteL, 32, 32, 0.67f);
+                printf("[Enemy] Spawned STATIONARY enemy #%d at (%.0f, %.0f)\n",
+                       enemyCount, sp->position.x, sp->position.y);
+            } else {
+                printf("[Enemy] SKIPPED stationary at (%.0f, %.0f) — MAX_ENEMIES reached\n",
+                       sp->position.x, sp->position.y);
+            }
+            processed[i] = true;
+        } else {
+            // ── Patrol group: gather all points with the same name ─────────
+            Vector2 waypoints[ENEMY_MAX_WAYPOINTS];
+            int wpCount = 0;
+
+            for (int j = i; j < map.enemySpawnCount; j++) {
+                if (!processed[j] && strcmp(map.enemySpawns[j].group, sp->group) == 0) {
+                    if (wpCount < ENEMY_MAX_WAYPOINTS) {
+                        waypoints[wpCount++] = map.enemySpawns[j].position;
+                    }
+                    processed[j] = true;
+                }
+            }
+
+            if (enemyCount < MAX_ENEMIES && wpCount > 0) {
+                InitEnemy(&enemies[enemyCount++], waypoints[0], waypoints, wpCount,
+                    enemySpriteR, enemySpriteL, 32, 32, 0.67f);
+                printf("[Enemy] Spawned PATROL enemy #%d group='%s' with %d waypoints\n",
+                       enemyCount, sp->group, wpCount);
+            } else {
+                printf("[Enemy] SKIPPED patrol group '%s' — MAX_ENEMIES reached or no waypoints\n",
+                       sp->group);
+            }
+        }
+    }
+    printf("[Enemy] Total enemies spawned: %d\n", enemyCount);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SetupAct — configure map, enemies, and spawn point for a given act.
+//   Call this when initialising or transitioning acts.
+// ─────────────────────────────────────────────────────────────────────────────
+static void SetupAct(int act)
+{
+    // Clean up previous act resources
+    UnloadTiledMap(&map);
+    for (int i = 0; i < enemyCount; i++) UnloadEnemy(&enemies[i]);
+    enemyCount = 0;
+
+    // Unload previous shared enemy textures
+    if (enemySpriteR.id != 0) { UnloadTexture(enemySpriteR); enemySpriteR = (Texture2D){0}; }
+    if (enemySpriteL.id != 0) { UnloadTexture(enemySpriteL); enemySpriteL = (Texture2D){0}; }
+
+    currentAct = act;
+
+    switch (act) {
+        case 0: // ACT 1 — Prologue (stun-only bullets)
+            LoadTiledMap(&map, "../assets/map/trial.json");
+            chapterSpawnPos = (Vector2){ 600, 867 };
+            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
+            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            SpawnEnemiesFromMap();
+            objMoveDone = false;
+            objDashDone = false;
+            objShootDone = false;
+            objEvacuateDone = false;
+            displayObjectives = true;
+            break;
+
+        case 1: // ACT 2 — Level 2
+            LoadTiledMap(&map, "../assets/map/level 2.json");
+            chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
+            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
+            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            SpawnEnemiesFromMap();
+            displayObjectives = true;
+            break;
+
+        default:
+            break;
+    }
+
+    // Place player at the act's spawn point
+    player.position = chapterSpawnPos;
+    player.health   = player.maxHealth;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,9 +198,6 @@ void InitScreenGameplay(void)
                   867,
                   "../assets/character/Adrian_Walk.png", 6, 2);
 
-    // ── Map ───────────────────────────────────────────────────────────────────
-    LoadTiledMap(&map, "../assets/map/trial.json");
-
     // ── Weapon ────────────────────────────────────────────────────────────────
     InitWeapon(&playerWeapon);
 
@@ -80,40 +207,17 @@ void InitScreenGameplay(void)
     camera.rotation = 0.0f;
     camera.zoom     = 2.0f;
 
-    // ── Enemies ───────────────────────────────────────────────────────────────
-    // Each enemy has its own patrol route (up to ENEMY_MAX_WAYPOINTS stops).
-    // To add a new enemy: copy the block below, change the waypoints and spawn
-    // position, and increment enemyCount.
-    //
-    // To give it a sprite replace NULL with the path, e.g.:
-    //   "../assets/character/goblin.png"
-    // and supply the correct frameWidth / frameHeight / scale.
-
-    enemyCount = 0;
-    isPaused = false;
-
-    // Reset lives & death state
+    // ── State reset ───────────────────────────────────────────────────────────
+    isPaused       = false;
     playerLives    = STARTING_LIVES;
     isPlayerDead   = false;
     deathTimer     = 0.0f;
     isGameOver     = false;
     deathFadeAlpha = 0.0f;
-    chapterSpawnPos = (Vector2){ 600, 867 }; // Current chapter spawn
-    currentAct     = 0;
     currentChapter = 0;
 
-    // Helper macro to easily spawn an enemy that patrols between two points
-    #define SPAWN_BASIC_ENEMY(x1, y1, x2, y2) \
-        do { \
-            if (enemyCount < MAX_ENEMIES) { \
-                Vector2 pts[] = { { x1, y1 }, { x2, y2 } }; \
-                InitEnemy(&enemies[enemyCount++], pts[0], pts, 2, "../assets/character/slime_abberant_r.png", "../assets/character/slime_abberant_l.png", 32, 32, 0.67f); \
-            } \
-        } while(0)
-        SPAWN_BASIC_ENEMY(790,1480,790,1650);
-        SPAWN_BASIC_ENEMY(1070,1480,1070,1650);
-
-    #undef SPAWN_BASIC_ENEMY
+    // ── Load first act ────────────────────────────────────────────────────────
+    SetupAct(0);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,6 +226,12 @@ void InitScreenGameplay(void)
 GameScreen UpdateScreenGameplay(Audio* gameAudio)
 {
     float dt = GetFrameTime();
+
+    // ── Pending Map Transition ────────────────────────────────────────────────
+    if (pendingAct != -1) {
+        SetupAct(pendingAct);
+        pendingAct = -1;
+    }
 
     // ── Pause Handle ──────────────────────────────────────────────────────────
     if (IsKeyPressed(KEY_ESCAPE)) {
@@ -170,6 +280,31 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
         // ── Player ────────────────────────────────────────────────────────────
         UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
 
+        // ── Objective Tracking ────────────────────────────────────────────────
+        if (displayObjectives) {
+            if (currentAct == 0) {
+                if (!objMoveDone && Vector2Length(player.velocity) > 0.1f) objMoveDone = true;
+                if (!objDashDone && player.isDashing) objDashDone = true;
+                if (!objShootDone && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) objShootDone = true;
+                
+                // Objective: Evacuate the laboratory
+                if (!objEvacuateDone && map.hasNextActTrigger) {
+                    Rectangle playerHitbox = {
+                        player.position.x, player.position.y,
+                        player.frameRec.width * player.scale, player.frameRec.height * player.scale
+                    };
+                    if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
+                        objEvacuateDone = true;
+                        pendingAct = 1; // Load Act 2 when gameplay resumes
+                        LoadDialogueFile("../assets/dialogue/act2.txt");
+                        return DIALOGUE;
+                    }
+                }
+            } else if (currentAct == 1) {
+                // Act 2 objective logic (Placeholder)
+            }
+        }
+
     Vector2 playerCentre = {
         player.position.x + (player.frameRec.width  * player.scale) * 0.5f,
         player.position.y + (player.frameRec.height * player.scale) * 0.5f,
@@ -198,9 +333,15 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     if (CheckCollisionCircleRec(bPos, playerWeapon.bullets[b].radius, enemyBounds)) {
                         // Bullet hits enemy
                         playerWeapon.bullets[b].active = false;
-                        Vector2 kbDir = Vector2Normalize(playerWeapon.bullets[b].velocity);
-                        DamageEnemy(&enemies[i], 34.0f, kbDir, 400.0f);
-                        TriggerShake(4.0f, 0.10f);
+                        if (currentAct == 0) {
+                            // Act 1 (Prologue): stun only — no damage
+                            StunEnemy(&enemies[i]);
+                            TriggerShake(2.0f, 0.08f);
+                        } else {
+                            // Normal combat: full damage
+                            DamageEnemy(&enemies[i], 34.0f);
+                            TriggerShake(4.0f, 0.10f);
+                        }
                     }
                 }
             }
@@ -216,7 +357,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
                 if (CheckCollisionRecs(playerBounds, enemyBounds)) {
                     // Deal damage to player
-                    player.health -= 25.0f;
+                    player.health -= 50.0f;
                     if (player.health < 0.0f) player.health = 0.0f;
                     player.hitInvincibleTimer = 1.0f; // 1 second of i-frames
                     TriggerShake(8.0f, 0.20f);
@@ -328,8 +469,61 @@ void DrawScreenGameplay(void)
 
     // ── HUD (screen-space, no camera transform) ───────────────────────────────
     DrawCharacterHUD(&player, player.sprite);
-    DrawText("WASD / Arrows: Move  |  LMB: Shoot  |  ESC: Pause",
-             10, 10, 14, DARKGRAY);
+    
+    int textYpos = 20;
+
+    // Objective Bar
+    if (displayObjectives) {
+        const char* objTexts[4] = {0};
+        bool objStates[4] = {0};
+        int numObjectives = 0;
+
+        if (currentAct == 0) {
+            objTexts[0] = "Move (WASD / Arrows)";
+            objTexts[1] = "Dash (SHIFT)";
+            objTexts[2] = "Shoot (LMB)";
+            objTexts[3] = "Evacuate the laboratory";
+            objStates[0] = objMoveDone; objStates[1] = objDashDone; objStates[2] = objShootDone; objStates[3] = objEvacuateDone;
+            numObjectives = 4;
+        } else if (currentAct == 1) {
+            objTexts[0] = "Explore the new area";
+            objStates[0] = false;
+            numObjectives = 1;
+        }
+
+        if (numObjectives > 0) {
+            int maxTextW = MeasureText("Objectives:", 22);
+            for (int i = 0; i < numObjectives; i++) {
+                int w = MeasureText(objTexts[i], 20);
+                if (w > maxTextW) maxTextW = w;
+            }
+
+            Rectangle barRec = { 20, 20, (float)(maxTextW + 70), 40 + (numObjectives * 30) };
+            
+            DrawRectangleRounded(barRec, 0.2f, 10, Fade(BLACK, 0.7f));
+            DrawRectangleRoundedLines(barRec, 0.2f, 10, DARKGRAY);
+
+            DrawText("Objectives:", (int)barRec.x + 15, (int)barRec.y + 10, 22, LIGHTGRAY);
+
+            for (int i = 0; i < numObjectives; i++) {
+                int y = (int)barRec.y + 40 + (i * 30);
+                Color textColor = objStates[i] ? GRAY : RAYWHITE;
+                DrawText(objTexts[i], (int)barRec.x + 15, y, 20, textColor);
+                
+                Rectangle box = { barRec.x + maxTextW + 30, y, 20, 20 };
+                DrawRectangleLinesEx(box, 2, objStates[i] ? DARKGRAY : GRAY);
+                
+                if (objStates[i]) {
+                    DrawLineEx((Vector2){box.x + 4, box.y + 10}, (Vector2){box.x + 8, box.y + 16}, 3, GREEN);
+                    DrawLineEx((Vector2){box.x + 8, box.y + 16}, (Vector2){box.x + 18, box.y + 4}, 3, GREEN);
+                }
+            }
+            
+            textYpos = 20 + 40 + (numObjectives * 30) + 15;
+        }
+    }
+
+    DrawText("Ignore enemy visual cone, they can't see through walls!!", 20, textYpos, 20, RAYWHITE);
 
     // Lives counter in the top right
     const char* hudLivesText = TextFormat("Lives: %d", playerLives);
@@ -430,6 +624,10 @@ void UnloadScreenGameplay(void)
     UnloadTiledMap(&map);
     UnloadCharacter(&player);
     for (int i = 0; i < enemyCount; i++) UnloadEnemy(&enemies[i]);
+
+    // Unload shared enemy textures
+    if (enemySpriteR.id != 0) UnloadTexture(enemySpriteR);
+    if (enemySpriteL.id != 0) UnloadTexture(enemySpriteL);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

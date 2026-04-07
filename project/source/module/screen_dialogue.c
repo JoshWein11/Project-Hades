@@ -10,8 +10,27 @@ static SceneEvent events[MAX_DIALOGUES];
 static int eventCount = 0;
 static int currentEvent = 0;
 
-// Portrait textures (maps 1:1 with dialogue events)
-static Texture2D portraits[MAX_DIALOGUES];
+// Character portrait registry — each character's images loaded once
+#define MAX_CHARACTERS 16
+typedef struct {
+    char name[64];
+    Texture2D portraitLeft;
+    Texture2D portraitRight;
+} CharacterPortrait;
+
+static CharacterPortrait charRegistry[MAX_CHARACTERS];
+static int charRegistryCount = 0;
+
+// Helper: look up a character's portrait by name and side
+static Texture2D GetCharacterPortrait(const char* name, bool isRight) {
+    for (int i = 0; i < charRegistryCount; i++) {
+        if (strcmp(charRegistry[i].name, name) == 0) {
+            return isRight ? charRegistry[i].portraitRight : charRegistry[i].portraitLeft;
+        }
+    }
+    Texture2D empty = {0};
+    return empty;
+}
 
 // Active background and music state
 static Texture2D activeBg;
@@ -36,6 +55,24 @@ static int soundCacheCount = 0;
 // State for WAIT event
 static int waitTimerFrames = 0;
 static int waitTargetFrames = 0;
+
+// State for ANIM event (sprite sheet playback)
+static Texture2D animTexture = {0};
+static bool animActive = false;
+static int animTotalFrames = 0;
+static int animCurrentFrame = 0;
+static float animFps = 5.0f;
+static int animFrameTimer = 0;
+
+// Title card fade state
+typedef enum { TITLE_FADE_IN, TITLE_HOLD, TITLE_FADE_OUT } TitlePhase;
+static TitlePhase titlePhase = TITLE_FADE_IN;
+static int titleTimer = 0;
+static float titleAlpha = 0.0f;
+
+#define TITLE_FADE_IN_FRAMES  90   // 1.5 seconds at 60 FPS
+#define TITLE_HOLD_FRAMES     120  // 2.0 seconds
+#define TITLE_FADE_OUT_FRAMES 90   // 1.5 seconds
 
 // Typewriter effect state
 static int framesCounter = 0;
@@ -122,6 +159,7 @@ static void ResetTypewriter(void)
 }
 
 // Helper: parse a single dialogue block (speaker line + text line)
+// Format: SPEAKER|left_or_right  (portrait looked up from character registry)
 static bool ParseDialogueEvent(const char* block, SceneEvent* entry)
 {
     // Find the first newline to split speaker line and text line
@@ -144,11 +182,9 @@ static bool ParseDialogueEvent(const char* block, SceneEvent* entry)
 
     if (strlen(speakerLine) == 0 || strlen(textLine) == 0) return false;
 
-    // Parse speaker line: SPEAKER|image.png|left_or_right
+    // Parse speaker line: SPEAKER|left_or_right
     char* pipe1 = strchr(speakerLine, '|');
     if (pipe1 == NULL) return false;
-    char* pipe2 = strchr(pipe1 + 1, '|');
-    if (pipe2 == NULL) return false;
 
     // Speaker name
     int nameLen = (int)(pipe1 - speakerLine);
@@ -157,16 +193,9 @@ static bool ParseDialogueEvent(const char* block, SceneEvent* entry)
     entry->speaker[nameLen] = '\0';
     TrimString(entry->speaker);
 
-    // Image filename
-    int imgLen = (int)(pipe2 - pipe1 - 1);
-    if (imgLen >= 128) imgLen = 127;
-    strncpy(entry->image, pipe1 + 1, imgLen);
-    entry->image[imgLen] = '\0';
-    TrimString(entry->image);
-
-    // Position (left or right)
+    // Position (left or right) — everything after the pipe
     char position[16];
-    strncpy(position, pipe2 + 1, 15);
+    strncpy(position, pipe1 + 1, 15);
     position[15] = '\0';
     TrimString(position);
     entry->isRight = (strcmp(position, "right") == 0);
@@ -174,6 +203,7 @@ static bool ParseDialogueEvent(const char* block, SceneEvent* entry)
     entry->type = EVENT_DIALOGUE;
     strncpy(entry->text, textLine, 255);
     entry->text[255] = '\0';
+    entry->image[0] = '\0'; // No longer used
 
     return true;
 }
@@ -186,10 +216,20 @@ void InitScreenDialogue(const char* dialogueFile)
     texCacheCount = 0;
     musicCacheCount = 0;
     soundCacheCount = 0;
+    charRegistryCount = 0;
     hasActiveBg = false;
     hasActiveBgm = false;
+    titlePhase = TITLE_FADE_IN;
+    titleTimer = 0;
+    titleAlpha = 0.0f;
+    animActive = false;
+    animCurrentFrame = 0;
+    animFrameTimer = 0;
+    animTotalFrames = 0;
+    memset(&animTexture, 0, sizeof(Texture2D));
     memset(&activeBg, 0, sizeof(Texture2D));
     memset(&activeBgm, 0, sizeof(Music));
+    memset(charRegistry, 0, sizeof(charRegistry));
 
     char* fileText = LoadFileText(dialogueFile);
     if (fileText == NULL) {
@@ -251,6 +291,96 @@ void InitScreenDialogue(const char* dialogueFile)
                                     ev->type = EVENT_WAIT;
                                     ev->floatArg = (float)atof(cmdArg);
                                     eventCount++;
+                                } else if (strcmp(cmdType, "TITLE") == 0) {
+                                    ev->type = EVENT_TITLE;
+                                    strncpy(ev->text, cmdArg, 255);
+                                    ev->text[255] = '\0';
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "ANIM") == 0) {
+                                    // CMD|ANIM|filename.png|columns|fps
+                                    // cmdArg = "filename.png|10|5"
+                                    char animFile[128] = {0};
+                                    int animCols = 1;
+                                    float animSpeed = 5.0f;
+                                    char* ap1 = strchr(cmdArg, '|');
+                                    if (ap1) {
+                                        int afLen = (int)(ap1 - cmdArg);
+                                        if (afLen >= 128) afLen = 127;
+                                        strncpy(animFile, cmdArg, afLen);
+                                        animFile[afLen] = '\0';
+                                        TrimString(animFile);
+                                        char* ap2 = strchr(ap1 + 1, '|');
+                                        if (ap2) {
+                                            // Has both columns and fps
+                                            char colStr[16] = {0};
+                                            int colLen = (int)(ap2 - ap1 - 1);
+                                            if (colLen >= 16) colLen = 15;
+                                            strncpy(colStr, ap1 + 1, colLen);
+                                            colStr[colLen] = '\0';
+                                            TrimString(colStr);
+                                            animCols = atoi(colStr);
+                                            animSpeed = (float)atof(ap2 + 1);
+                                        } else {
+                                            // Only columns, default 5 fps
+                                            animCols = atoi(ap1 + 1);
+                                        }
+                                    } else {
+                                        // No pipes — just filename, default 1 col 5 fps
+                                        strncpy(animFile, cmdArg, 127);
+                                        animFile[127] = '\0';
+                                        TrimString(animFile);
+                                    }
+                                    if (animCols < 1) animCols = 1;
+                                    if (animSpeed <= 0.0f) animSpeed = 5.0f;
+                                    ev->type = EVENT_ANIM;
+                                    snprintf(ev->text, sizeof(ev->text), "../assets/images/background/%s", animFile);
+                                    ev->intArg = animCols;
+                                    ev->floatArg = animSpeed;
+                                    GetCachedTexture(ev->text); // Preload
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "CHAR") == 0 && charRegistryCount < MAX_CHARACTERS) {
+                                    // CMD|CHAR|NAME|left_img.png|right_img.png
+                                    // cmdArg = "NAME|left_img.png|right_img.png"
+                                    char charName[64] = {0};
+                                    char leftImg[128] = {0};
+                                    char rightImg[128] = {0};
+                                    char* cp1 = strchr(cmdArg, '|');
+                                    if (cp1) {
+                                        int cnLen = (int)(cp1 - cmdArg);
+                                        if (cnLen >= 64) cnLen = 63;
+                                        strncpy(charName, cmdArg, cnLen);
+                                        charName[cnLen] = '\0';
+                                        TrimString(charName);
+                                        char* cp2 = strchr(cp1 + 1, '|');
+                                        if (cp2) {
+                                            // Has both left and right images
+                                            int lLen = (int)(cp2 - cp1 - 1);
+                                            if (lLen >= 128) lLen = 127;
+                                            strncpy(leftImg, cp1 + 1, lLen);
+                                            leftImg[lLen] = '\0';
+                                            TrimString(leftImg);
+                                            strncpy(rightImg, cp2 + 1, 127);
+                                            rightImg[127] = '\0';
+                                            TrimString(rightImg);
+                                        } else {
+                                            // Only one image — used for both sides
+                                            strncpy(leftImg, cp1 + 1, 127);
+                                            leftImg[127] = '\0';
+                                            TrimString(leftImg);
+                                            strcpy(rightImg, leftImg);
+                                        }
+                                        // Load textures into registry
+                                        char pathBuf[256];
+                                        CharacterPortrait* cp = &charRegistry[charRegistryCount];
+                                        strcpy(cp->name, charName);
+                                        snprintf(pathBuf, sizeof(pathBuf), "../assets/images/character/%s", leftImg);
+                                        cp->portraitLeft = LoadTexture(pathBuf);
+                                        snprintf(pathBuf, sizeof(pathBuf), "../assets/images/character/%s", rightImg);
+                                        cp->portraitRight = LoadTexture(pathBuf);
+                                        charRegistryCount++;
+                                        TraceLog(LOG_INFO, "DIALOGUE: Registered character '%s' (L:%s R:%s)", charName, leftImg, rightImg);
+                                    }
+                                    // CHAR is not a playback event — don't increment eventCount
                                 }
                             }
                         }
@@ -272,9 +402,6 @@ void InitScreenDialogue(const char* dialogueFile)
                     if (eventCount < MAX_DIALOGUES) {
                         SceneEvent* ev = &events[eventCount];
                         if (ParseDialogueEvent(block, ev)) {
-                            char portraitPath[256];
-                            snprintf(portraitPath, sizeof(portraitPath), "../assets/images/character/%s", ev->image);
-                            portraits[eventCount] = LoadTexture(portraitPath);
                             eventCount++;
                         }
                     }
@@ -301,6 +428,12 @@ void ResetScreenDialogue(void)
     waitTargetFrames = 0;
     waitTimerFrames = 0;
     hasActiveBg = false;
+    titlePhase = TITLE_FADE_IN;
+    titleTimer = 0;
+    titleAlpha = 0.0f;
+    animActive = false;
+    animCurrentFrame = 0;
+    animFrameTimer = 0;
     
     if (hasActiveBgm) {
         StopMusicStream(activeBgm);
@@ -365,6 +498,91 @@ GameScreen UpdateScreenDialogue(Audio* audio)
             }
         }
     } 
+    else if (current->type == EVENT_TITLE) {
+        titleTimer++;
+        switch (titlePhase) {
+            case TITLE_FADE_IN:
+                titleAlpha = (float)titleTimer / (float)TITLE_FADE_IN_FRAMES;
+                if (titleAlpha >= 1.0f) {
+                    titleAlpha = 1.0f;
+                    titlePhase = TITLE_HOLD;
+                    titleTimer = 0;
+                }
+                break;
+            case TITLE_HOLD:
+                titleAlpha = 1.0f;
+                if (titleTimer >= TITLE_HOLD_FRAMES) {
+                    titlePhase = TITLE_FADE_OUT;
+                    titleTimer = 0;
+                }
+                break;
+            case TITLE_FADE_OUT:
+                titleAlpha = 1.0f - (float)titleTimer / (float)TITLE_FADE_OUT_FRAMES;
+                if (titleAlpha <= 0.0f) {
+                    titleAlpha = 0.0f;
+                    titlePhase = TITLE_FADE_IN;
+                    titleTimer = 0;
+                    currentEvent++;
+                    if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+                        ResetTypewriter();
+                    }
+                }
+                break;
+        }
+        // Allow skipping with click or space
+        if (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (titlePhase != TITLE_FADE_OUT) {
+                // Jump to fade-out
+                titlePhase = TITLE_FADE_OUT;
+                titleTimer = 0;
+                titleAlpha = 1.0f;
+            } else {
+                // Already fading out, skip entirely
+                titleAlpha = 0.0f;
+                titlePhase = TITLE_FADE_IN;
+                titleTimer = 0;
+                currentEvent++;
+                if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+                    ResetTypewriter();
+                }
+            }
+        }
+    }
+    else if (current->type == EVENT_ANIM) {
+        // Initialize animation on first frame
+        if (!animActive) {
+            animTexture = GetCachedTexture(current->text);
+            animActive = (animTexture.id > 0);
+            animTotalFrames = current->intArg;
+            animFps = current->floatArg;
+            animCurrentFrame = 0;
+            animFrameTimer = 0;
+            TraceLog(LOG_INFO, "ANIM: file=%s id=%d size=%dx%d frames=%d fps=%.1f active=%d",
+                     current->text, animTexture.id, animTexture.width, animTexture.height,
+                     animTotalFrames, animFps, animActive);
+        }
+
+        if (animActive) {
+            animFrameTimer++;
+            int framesPerTick = (int)(60.0f / animFps);
+            if (framesPerTick < 1) framesPerTick = 1;
+            if (animFrameTimer >= framesPerTick) {
+                animFrameTimer = 0;
+                animCurrentFrame++;
+                if (animCurrentFrame >= animTotalFrames) {
+                    // Animation finished
+                    animActive = false;
+                    currentEvent++;
+                    if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+                        ResetTypewriter();
+                    }
+                }
+            }
+        } else {
+            // Texture failed to load, skip
+            currentEvent++;
+        }
+    }
     else if (current->type == EVENT_DIALOGUE) {
         // Typewriter effect logic
         if (!isFinishedTyping) {
@@ -403,6 +621,28 @@ GameScreen UpdateScreenDialogue(Audio* audio)
 
 void DrawScreenDialogue(void)
 {
+    // Title card: full black screen with centered fading text
+    if (currentEvent < eventCount && events[currentEvent].type == EVENT_TITLE) {
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, BLACK);
+        SceneEvent* titleEv = &events[currentEvent];
+        int fontSize = 40;
+        int textWidth = MeasureText(titleEv->text, fontSize);
+        int x = (VIRTUAL_WIDTH - textWidth) / 2;
+        int y = VIRTUAL_HEIGHT / 2 - fontSize / 2;
+        DrawText(titleEv->text, x, y, fontSize, Fade(WHITE, titleAlpha));
+        return;
+    }
+
+    // Sprite sheet animation: draw current frame (rows = stacked vertically)
+    if (currentEvent < eventCount && events[currentEvent].type == EVENT_ANIM && animActive) {
+        int frameHeight = animTexture.height / animTotalFrames;
+        Rectangle src = { 0, (float)(animCurrentFrame * frameHeight),
+                          (float)animTexture.width, (float)frameHeight };
+        Rectangle dest = { 0, 0, (float)VIRTUAL_WIDTH, (float)VIRTUAL_HEIGHT };
+        DrawTexturePro(animTexture, src, dest, (Vector2){0, 0}, 0.0f, WHITE);
+        return;
+    }
+
     if (hasActiveBg) {
         float scaleX = (float)VIRTUAL_WIDTH / (float)activeBg.width;
         float scaleY = (float)VIRTUAL_HEIGHT / (float)activeBg.height;
@@ -420,7 +660,7 @@ void DrawScreenDialogue(void)
     SceneEvent* current = &events[currentEvent];
 
     // Draw character portrait
-    Texture2D portrait = portraits[currentEvent];
+    Texture2D portrait = GetCharacterPortrait(current->speaker, current->isRight);
     if (portrait.id > 0) {
         float portraitScale = 367.0f / (float)portrait.width;
         float portraitW = portrait.width * portraitScale;
@@ -467,13 +707,12 @@ void DrawScreenDialogue(void)
 
 void UnloadScreenDialogue(void)
 {
-    // Unload portraits
-    for (int i = 0; i < eventCount; i++) {
-        if (portraits[i].id > 0) {
-            UnloadTexture(portraits[i]);
-            portraits[i].id = 0;
-        }
+    // Unload character registry portraits
+    for (int i = 0; i < charRegistryCount; i++) {
+        if (charRegistry[i].portraitLeft.id > 0) UnloadTexture(charRegistry[i].portraitLeft);
+        if (charRegistry[i].portraitRight.id > 0) UnloadTexture(charRegistry[i].portraitRight);
     }
+    charRegistryCount = 0;
     // Unload cached textures
     for (int i = 0; i < texCacheCount; i++) {
         if (cachedTextures[i].id > 0) UnloadTexture(cachedTextures[i]);
@@ -494,4 +733,10 @@ void UnloadScreenDialogue(void)
     musicCacheCount = 0;
     hasActiveBg = false;
     hasActiveBgm = false;
+}
+
+void LoadDialogueFile(const char* dialogueFile)
+{
+    UnloadScreenDialogue();
+    InitScreenDialogue(dialogueFile);
 }
