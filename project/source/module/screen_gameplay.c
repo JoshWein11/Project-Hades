@@ -169,7 +169,16 @@ static void SetupAct(int act)
             displayObjectives = true;
             break;
 
-        case 1: // ACT 2 — Level 2
+        case 1: // ACT 2 — Level 1 (checkpoint map, stun-only)
+            LoadTiledMap(&map, "../assets/map/level 1.json");
+            chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
+            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
+            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            SpawnEnemiesFromMap();
+            displayObjectives = true;
+            break;
+
+        case 2: // ACT 3 — Level 2 (full damage)
             LoadTiledMap(&map, "../assets/map/level 2.json");
             chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
             enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
@@ -301,7 +310,20 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     }
                 }
             } else if (currentAct == 1) {
-                // Act 2 objective logic (Placeholder)
+                // Act 2: check "Next ACT" trigger → play act3.txt → advance to level 2
+                if (map.hasNextActTrigger) {
+                    Rectangle playerHitbox = {
+                        player.position.x, player.position.y,
+                        player.frameRec.width * player.scale, player.frameRec.height * player.scale
+                    };
+                    if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
+                        pendingAct = 2;
+                        LoadDialogueFile("../assets/dialogue/act3.txt");
+                        return DIALOGUE;
+                    }
+                }
+            } else if (currentAct == 2) {
+                // Act 3 objective logic (future: level 3 transition)
             }
         }
 
@@ -333,7 +355,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     if (CheckCollisionCircleRec(bPos, playerWeapon.bullets[b].radius, enemyBounds)) {
                         // Bullet hits enemy
                         playerWeapon.bullets[b].active = false;
-                        if (currentAct == 0) {
+                        if (currentAct <= 1) {
                             // Act 1 (Prologue): stun only — no damage
                             StunEnemy(&enemies[i]);
                             TriggerShake(2.0f, 0.08f);
@@ -425,16 +447,23 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             isGameOver     = false;
             playerLives    = STARTING_LIVES;
             deathFadeAlpha = 0.0f;
-            player.position = chapterSpawnPos; // Back to act start logic would go here
-            player.health   = player.maxHealth;
-            player.hitInvincibleTimer = 1.5f;
 
-            for (int i = 0; i < enemyCount; i++) {
-                enemies[i].health = enemies[i].maxHealth;
-                enemies[i].state  = ENEMY_PATROL;
-                enemies[i].position = enemies[i].waypoints[0];
-                enemies[i].waypointIndex = 0;
-                enemies[i].navPathActive = false;
+            if (currentAct >= 1) {
+                // Always respawn at Act 1 (level 1.json) checkpoint
+                pendingAct = 1;
+            } else {
+                // Act 0 restart (stays in lab)
+                player.position = chapterSpawnPos;
+                player.health   = player.maxHealth;
+                player.hitInvincibleTimer = 1.5f;
+
+                for (int i = 0; i < enemyCount; i++) {
+                    enemies[i].health = enemies[i].maxHealth;
+                    enemies[i].state  = ENEMY_PATROL;
+                    enemies[i].position = enemies[i].waypoints[0];
+                    enemies[i].waypointIndex = 0;
+                    enemies[i].navPathActive = false;
+                }
             }
         }
         return GAMEPLAY;
@@ -486,7 +515,11 @@ void DrawScreenGameplay(void)
             objStates[0] = objMoveDone; objStates[1] = objDashDone; objStates[2] = objShootDone; objStates[3] = objEvacuateDone;
             numObjectives = 4;
         } else if (currentAct == 1) {
-            objTexts[0] = "Explore the new area";
+            objTexts[0] = "Explore the area";
+            objStates[0] = false;
+            numObjectives = 1;
+        } else if (currentAct == 2) {
+            objTexts[0] = "Continue forward";
             objStates[0] = false;
             numObjectives = 1;
         }
@@ -659,17 +692,23 @@ void GetGameplaySaveData(SaveData* data)
 // ─────────────────────────────────────────────────────────────────────────────
 void RestoreGameplayFromSave(const SaveData* data)
 {
-    player.position.x = data->playerX;
-    player.position.y = data->playerY;
-    player.health     = data->playerHealth;
-    player.stamina    = data->playerStamina;
-
     // Progression
     playerLives    = data->lives;
     if (playerLives <= 0) playerLives = STARTING_LIVES; // Fallback for older saves
     
-    currentAct     = data->currentAct;
     currentChapter = data->currentChapter;
+
+    // If the saved act differs from the currently loaded one,
+    // reload the correct map, enemies, and textures.
+    if (data->currentAct != currentAct) {
+        SetupAct(data->currentAct);
+    }
+
+    // Override the default spawn position with the saved position
+    player.position.x = data->playerX;
+    player.position.y = data->playerY;
+    player.health     = data->playerHealth;
+    player.stamina    = data->playerStamina;
 
     // Reset death states on load
     isPlayerDead   = false;
@@ -677,6 +716,7 @@ void RestoreGameplayFromSave(const SaveData* data)
     deathTimer     = 0.0f;
     deathFadeAlpha = 0.0f;
 
+    // Restore enemy states from save
     for (int i = 0; i < data->enemyCount && i < enemyCount; i++) {
         enemies[i].position.x = data->enemyX[i];
         enemies[i].position.y = data->enemyY[i];

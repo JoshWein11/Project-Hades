@@ -232,10 +232,10 @@ void UpdateCharacter(Character* player, Rectangle* colliders, int colliderCount,
     float scaledWidth  = player->frameRec.width  * player->scale;
     float scaledHeight = player->frameRec.height * player->scale;
 
-    // Use a slightly smaller hitbox (67% of sprite size) so the player can
+    // Use a slightly smaller hitbox (50% of sprite size) so the player can
     // squeeze past corners more comfortably; anchored to the bottom-centre of the sprite
-    float hitboxWidth   = scaledWidth  * 0.67f;
-    float hitboxHeight  = scaledHeight * 0.67f;
+    float hitboxWidth   = scaledWidth  * 0.50f;
+    float hitboxHeight  = scaledHeight * 0.50f;
     float hitboxOffsetX = (scaledWidth  - hitboxWidth)  / 2.0f; // Centre horizontally
     float hitboxOffsetY =  scaledHeight - hitboxHeight;          // Anchor to bottom half
 

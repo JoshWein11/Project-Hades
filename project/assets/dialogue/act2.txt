@@ -1,2 +1,49 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|NEWS|news.png|news.png
+---
 CMD|TITLE|ACT 2 : The Decision
 ---
+CMD|BG|act2_scene1.qoi
+CMD|BGM|bgm1.wav
+CMD|WAIT|1.0
+---
+NEWS|left
+...authorities have confirmed that the underground research laboratory has 
+been permanently shut down following yesterday's catastrophic incident. 
+No survivors are found, and the facility is now quarantined by the government
+---
+ADRIAN|left
+...
+---
+CMD|BG|act2_scene2.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+...
+---
+ADRIAN|left
+WHY!
+---
+ADRIAN|left
+What kind of father would..
+---
+ADRIAN|left
+...
+---
+ADRIAN|left
+...No matter what..
+---
+ADRIAN|left
+I've made a promise to keep her safe. I must bring her back no matter what!
+---
+CMD|TITLE|ACT 3 : Return to the Facility
+---
+CMD|BG|act3_scene1.qoi
+CMD|BGM|bgm3.wav
+CMD|WAIT|1.0
+---
+ADRIAN|left
+It's... worse than I imagined
+---
+ADRIAN|left
+Everything... is destroyed. Security doors crushed, panels shattered...
