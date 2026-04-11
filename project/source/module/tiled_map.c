@@ -12,9 +12,12 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->spritesheet = LoadTexture("../assets/images/tileset/spritesheet.png");
     mapData->SciFi = LoadTexture("../assets/images/tileset/SciFi.png");
     mapData->stage2tileset = LoadTexture("../assets/images/tileset/stage 2 tileset.png");
+    mapData->orion_off = LoadTexture("../assets/images/tileset/orion off.png");
+    mapData->orion = LoadTexture("../assets/images/tileset/orion.png");
     mapData->collisionCount = 0;
     mapData->navNodeCount   = 0;
     mapData->enemySpawnCount = 0;
+    mapData->puzzleObjectCount = 0;
     mapData->hasNextActTrigger = false;
     mapData->hasSpawnPoint = false;
 
@@ -67,6 +70,38 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
                         mapData->spawnPoint.x = obj->x;
                         mapData->spawnPoint.y = obj->y;
                         mapData->hasSpawnPoint = true;
+                    }
+                }
+                // ── Puzzle layer → load as interactable puzzle objects ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "Puzzle") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->puzzleObjectCount < MAX_PUZZLE_OBJECTS) {
+                        PuzzleObject* po = &mapData->puzzleObjects[mapData->puzzleObjectCount];
+                        po->bounds = (Rectangle){ obj->x, obj->y, obj->width, obj->height };
+                        if (obj->name.ptr && strlen(obj->name.ptr) > 0) {
+                            strncpy(po->name, obj->name.ptr, 31);
+                            po->name[31] = '\0';
+                        } else {
+                            po->name[0] = '\0';
+                        }
+                        mapData->puzzleObjectCount++;
+                        obj = obj->next;
+                    }
+                } 
+                // ── Character layer → load as in-game dialogue interactables ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "character") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->characterObjectCount < MAX_PUZZLE_OBJECTS) {
+                        PuzzleObject* po = &mapData->characterObjects[mapData->characterObjectCount];
+                        po->bounds = (Rectangle){ obj->x, obj->y, obj->width, obj->height };
+                        if (obj->name.ptr && strlen(obj->name.ptr) > 0) {
+                            strncpy(po->name, obj->name.ptr, 31);
+                            po->name[31] = '\0';
+                        } else {
+                            po->name[0] = '\0';
+                        }
+                        mapData->characterObjectCount++;
+                        obj = obj->next;
                     }
                 } else {
                     // ── All other object layers → load as collision recs ───
@@ -144,12 +179,44 @@ void DrawTiledMap(MapData* mapData) {
                             tex = mapData->SciFi;
                         } else if (strstr(ts_ident, "stage 2 tileset")) {
                             tex = mapData->stage2tileset;
+                        } else if (strstr(ts_ident, "orion off")) {
+                            tex = mapData->orion_off;
+                        } else if (strstr(ts_ident, "orion")) {
+                            tex = mapData->orion;
                         }
                     }
                     
                     if (tex.id == 0) continue; // Safety check
                     
                     int local_id = gid - firstgid;    // Convert global ID to local (0-based)
+                    
+                    // ── Animation Processing ──
+                    if (best_ts->tiles) {
+                        cute_tiled_tile_descriptor_t* tinfo = best_ts->tiles;
+                        while (tinfo) {
+                            if (tinfo->tile_index == local_id && tinfo->frame_count > 0 && tinfo->animation) {
+                                int total_duration = 0;
+                                for (int i = 0; i < tinfo->frame_count; i++) {
+                                    total_duration += tinfo->animation[i].duration;
+                                }
+                                if (total_duration > 0) {
+                                    // Use GetTime() seamlessly synced across all animated tiles globally
+                                    int current_time = (int)(GetTime() * 1000.0) % total_duration;
+                                    int accum = 0;
+                                    for (int i = 0; i < tinfo->frame_count; i++) {
+                                        accum += tinfo->animation[i].duration;
+                                        if (current_time < accum) {
+                                            local_id = tinfo->animation[i].tileid;
+                                            break;
+                                        }
+                                    }
+                                }
+                                break; // Stop searching once we found our tile id desc
+                            }
+                            tinfo = tinfo->next;
+                        }
+                    }
+
                     int cols = tex.width / tw;         // How many tiles fit in one row of the image
                     int src_x = (local_id % cols) * tw; // Column in tileset × tile width
                     int src_y = (local_id / cols) * th; // Row in tileset × tile height
@@ -178,4 +245,6 @@ void UnloadTiledMap(MapData* mapData) { //Unload Tiled Map
     UnloadTexture(mapData->spritesheet);
     UnloadTexture(mapData->SciFi);
     UnloadTexture(mapData->stage2tileset);
+    UnloadTexture(mapData->orion_off);
+    UnloadTexture(mapData->orion);
 }

@@ -47,3 +47,15 @@ It's... worse than I imagined
 ---
 ADRIAN|left
 Everything... is destroyed. Security doors crushed, panels shattered...
+---
+CMD|BG|act3_scene2.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+Pistols don't even scratch them... I'll have to find a new weapon.
+---
+ADRIAN|left
+I need to activate ORION
+---
+CMD|TITLE|Objective : Reach and restore the AI system.
+---

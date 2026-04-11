@@ -1,0 +1,5 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+This might be usefull, try write it down.
+---

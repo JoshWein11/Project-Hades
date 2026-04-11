@@ -1,0 +1,8 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+We need both keycard A and B to access elias's office.
+---
+ORION|left
+Explore the map to find puzzles to gain keycard.
+---

@@ -650,7 +650,7 @@ void DrawScreenDialogue(void)
         DrawTextureEx(activeBg, (Vector2){0, 0}, 0.0f, scale, WHITE);
         DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.3f));
     } else {
-        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.5f));
+        // Draw nothing — background is perfectly transparent over the active game scene!
     }
 
     if (currentEvent >= eventCount || events[currentEvent].type != EVENT_DIALOGUE) {

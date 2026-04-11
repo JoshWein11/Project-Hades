@@ -2,7 +2,7 @@ CMD|CHAR|LYRA|lyra_l.png|lyra_r.png
 CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
 CMD|CHAR|ELIAS|elias_l.png|elias_r.png
 CMD|CHAR|TECHNICIAN|tech.png|tech.png
-CMD|CHAR|ORION|orion.png|orion.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
 ---
 CMD|TITLE|ACT 1 : The Catastrophe (Prologue)
 ---

@@ -9,6 +9,7 @@
 #include "enemy.h"
 #include "savedata.h"
 #include "screen_dialogue.h"
+#include "puzzle.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -31,6 +32,59 @@ static bool objDashDone = false;
 static bool objShootDone = false;
 static bool objEvacuateDone = false;
 static bool displayObjectives = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Puzzle / Generator System
+// ─────────────────────────────────────────────────────────────────────────────
+#define MAX_GENS 4
+static PuzzleState genPuzzles[MAX_GENS];   // One puzzle per generator
+static int         genMapIndex[MAX_GENS];  // Maps gen index → puzzleObjects[] index
+static bool        genSolved[MAX_GENS];    // Tracks which gens are activated
+static int         genCount = 0;           // How many "Gens" objects were found
+static int         gensSolvedCount = 0;    // Total solved
+static int         nearbyGenIndex = -1;    // Which gen the player is currently near (-1 = none)
+static int         activeGenIndex = -1;    // Which gen's puzzle is open (-1 = none)
+static bool        nearOrionTrigger = false; // Player is inside Next ACT zone (after all gens done)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Interactive Image Viewer (Act 3)
+// ─────────────────────────────────────────────────────────────────────────────
+static Texture2D imgCode;
+static Texture2D imgRule;
+static int       imageMapIndex[2] = {-1, -1}; // Maps [0]=code, [1]=rules to puzzleObjects[] index (-1 if none)
+static int       nearbyImageIndex = -1;       // 0=code, 1=rules, -1=none
+static int       activeImageIndex = -1;       // 0=code, 1=rules, -1=none
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Puzzle Systems (Act 3)
+// ─────────────────────────────────────────────────────────────────────────────
+static CodePuzzle codePuzzle;
+static int        codePuzzleMapIndex = -1;
+static bool       codePuzzleNearby = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RGB Puzzle System (Act 3)
+// ─────────────────────────────────────────────────────────────────────────────
+static RGBPuzzle rgbPuzzle;             // State for tempo rhythm minigame
+static int       rgbMapIndex = -1;      // Tiled object index
+static bool      rgbNearby = false;     // Player near rgb puzzle
+static Sound     sfxButton;
+static Sound     sfxFail;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keycard & Popup System (Act 3)
+// ─────────────────────────────────────────────────────────────────────────────
+static bool hasKeycardA = false;
+static bool hasKeycardB = false;
+static float pickupTimer = 0.0f;
+static const char* pickupText = "";
+static bool nearAct3Exit = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// In-Game Dialogue System
+// ─────────────────────────────────────────────────────────────────────────────
+static bool isInGameDialogue = false;
+static int nearbyCharacterIndex = -1;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy list — increase capacity and call InitEnemy multiple times to add more.
@@ -176,6 +230,22 @@ static void SetupAct(int act)
             enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
             SpawnEnemiesFromMap();
             displayObjectives = true;
+
+            // ── Scan Puzzle layer for "Gens" objects ──────────────────────────
+            genCount = 0;
+            gensSolvedCount = 0;
+            nearbyGenIndex = -1;
+            activeGenIndex = -1;
+            nearOrionTrigger = false;
+            for (int i = 0; i < map.puzzleObjectCount && genCount < MAX_GENS; i++) {
+                if (strcmp(map.puzzleObjects[i].name, "Gens") == 0) {
+                    InitPuzzle(&genPuzzles[genCount]);
+                    genMapIndex[genCount] = i;
+                    genSolved[genCount] = false;
+                    genCount++;
+                }
+            }
+            printf("[Puzzle] Found %d generators on Puzzle layer\n", genCount);
             break;
 
         case 2: // ACT 3 — Level 2 (full damage)
@@ -185,6 +255,35 @@ static void SetupAct(int act)
             enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
             SpawnEnemiesFromMap();
             displayObjectives = true;
+            
+            // ── Scan Puzzle layer for image viewers, code, and rgb ───────────────────
+            imageMapIndex[0] = -1;
+            imageMapIndex[1] = -1;
+            nearbyImageIndex = -1;
+            activeImageIndex = -1;
+
+            rgbMapIndex = -1;
+            rgbNearby = false;
+            rgbPuzzle.solved = false; // Reset solved state for new map session
+            rgbPuzzle.active = false;
+            
+            // Setup CodePuzzle
+            Texture2D codeBg = LoadTexture("../assets/images/puzzle/code_puzzle.png");
+            InitCodePuzzle(&codePuzzle, codeBg);
+            codePuzzleMapIndex = -1;
+            codePuzzleNearby = false;
+
+            for (int i = 0; i < map.puzzleObjectCount; i++) {
+                if (strcmp(map.puzzleObjects[i].name, "note1") == 0) {
+                    imageMapIndex[0] = i; 
+                } else if (strcmp(map.puzzleObjects[i].name, "rules") == 0) {
+                    imageMapIndex[1] = i; 
+                } else if (strcmp(map.puzzleObjects[i].name, "rgb") == 0) {
+                    rgbMapIndex = i;
+                } else if (strcmp(map.puzzleObjects[i].name, "code") == 0 || strcmp(map.puzzleObjects[i].name, "code_puzzle") == 0) {
+                    codePuzzleMapIndex = i;
+                }
+            }
             break;
 
         default:
@@ -224,6 +323,16 @@ void InitScreenGameplay(void)
     isGameOver     = false;
     deathFadeAlpha = 0.0f;
     currentChapter = 0;
+
+    // ── Load Act 3 specific puzzle assets ─────────────────────────────────────
+    imgCode = LoadTexture("../assets/images/code.png");
+    imgRule = LoadTexture("../assets/images/rule.png");
+    Texture2D bg1 = LoadTexture("../assets/images/puzzle/rgb_1.png");
+    Texture2D bg2 = LoadTexture("../assets/images/puzzle/rgb_2.png");
+    Texture2D bg3 = LoadTexture("../assets/images/puzzle/rgb_3.png");
+    InitRGBPuzzle(&rgbPuzzle, bg1, bg2, bg3);
+    sfxButton = LoadSound("../assets/sfx/button.wav");
+    sfxFail = LoadSound("../assets/sfx/button_fail.wav");
 
     // ── Load first act ────────────────────────────────────────────────────────
     SetupAct(0);
@@ -285,9 +394,91 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
     // ── Core Gameplay Logic (Freeze during death) ─────────────────────────────
     if (!isPlayerDead && !isGameOver) {
-        
+
+        // ── In-Game Dialogue Active: freeze gameplay, process dialogue ────────
+        if (isInGameDialogue) {
+            GameScreen result = UpdateScreenDialogue(gameAudio);
+            if (result == GAMEPLAY) { // Finished playing sequence
+                isInGameDialogue = false;
+                UnloadScreenDialogue();
+            }
+            return GAMEPLAY; // Skip all other gameplay updates while discussing
+        }
+
+        // ── Code Puzzle Active: freeze gameplay ─────────────────────────────
+        if (codePuzzle.active) {
+            if (UpdateCodePuzzle(&codePuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
+                // Puzzle solved!
+                printf("[Puzzle] Code Memory Match solved!\n");
+                hasKeycardB = true;
+                pickupTimer = 4.0f;
+                pickupText = "- KEYCARD B ACQUIRED -";
+            }
+            return GAMEPLAY;
+        }
+
+        // ── Image Viewer Active: freeze gameplay, wait for 'E' to close ───────
+        if (activeImageIndex >= 0) { // Only triggered for rules image now
+            if (IsKeyPressed(KEY_E)) {
+                activeImageIndex = -1; // Close image view
+            }
+            return GAMEPLAY; // Skip all other gameplay updates while image is open
+        }
+
+        // ── RGB Puzzle Active: freeze gameplay, process rhythms ───────────────
+        if (rgbPuzzle.active) {
+            if (UpdateRGBPuzzle(&rgbPuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
+                // Puzzle just solved!
+                printf("[Puzzle] RGB Timing Game solved!\n");
+                hasKeycardA = true;
+                pickupTimer = 4.0f;
+                pickupText = "- KEYCARD A ACQUIRED -";
+            }
+            return GAMEPLAY; // Skip all other gameplay updates while puzzle is open
+        }
+
+        // ── Puzzle UI Active: freeze gameplay, only process puzzle input ─────
+        if (activeGenIndex >= 0) {
+            if (IsKeyPressed(KEY_E)) {
+                ClosePuzzle(&genPuzzles[activeGenIndex]); // Reset connections
+                activeGenIndex = -1;
+            } else {
+                Vector2 puzzleMouse = GetVirtualMouse();
+                if (UpdatePuzzle(&genPuzzles[activeGenIndex], puzzleMouse)) {
+                    // Puzzle just solved!
+                    genSolved[activeGenIndex] = true;
+                    gensSolvedCount++;
+                    printf("[Puzzle] Generator %d solved! (%d/%d)\n", activeGenIndex, gensSolvedCount, genCount);
+                    activeGenIndex = -1;
+                }
+            }
+            return GAMEPLAY; // Skip all other gameplay updates while puzzle is open
+        }
+
         // ── Player ────────────────────────────────────────────────────────────
         UpdateCharacter(&player, map.collisionRecs, map.collisionCount, mouseWorldPos, gameAudio);
+
+        // ── Character (NPC) Interaction (All acts) ────────────────────────────
+        nearbyCharacterIndex = -1;
+        {
+            Rectangle playerHitbox = {
+                player.position.x, player.position.y,
+                player.frameRec.width * player.scale, player.frameRec.height * player.scale
+            };
+            
+            for (int i = 0; i < map.characterObjectCount; i++) {
+                if (CheckCollisionRecs(playerHitbox, map.characterObjects[i].bounds)) {
+                    nearbyCharacterIndex = i;
+                    if (IsKeyPressed(KEY_E)) {
+                        char filepath[128];
+                        snprintf(filepath, sizeof(filepath), "../assets/dialogue/character/%s.txt", map.characterObjects[i].name);
+                        LoadDialogueFile(filepath);
+                        isInGameDialogue = true;
+                    }
+                    break;
+                }
+            }
+        }
 
         // ── Objective Tracking ────────────────────────────────────────────────
         if (displayObjectives) {
@@ -304,26 +495,109 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     };
                     if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
                         objEvacuateDone = true;
-                        pendingAct = 1; // Load Act 2 when gameplay resumes
+                        SetupAct(1); // Load Act 2 map NOW so player is already there
                         LoadDialogueFile("../assets/dialogue/act2.txt");
                         return DIALOGUE;
                     }
                 }
             } else if (currentAct == 1) {
-                // Act 2: check "Next ACT" trigger → play act3.txt → advance to level 2
-                if (map.hasNextActTrigger) {
+                // ── Generator proximity + interaction ────────────────────────
+                nearbyGenIndex = -1;
+                nearOrionTrigger = false;
+                {
                     Rectangle playerHitbox = {
                         player.position.x, player.position.y,
                         player.frameRec.width * player.scale, player.frameRec.height * player.scale
                     };
-                    if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
-                        pendingAct = 2;
-                        LoadDialogueFile("../assets/dialogue/act3.txt");
-                        return DIALOGUE;
+
+                    // Check generator proximity
+                    for (int i = 0; i < genCount; i++) {
+                        if (genSolved[i]) continue; // Already solved, skip
+                        int mi = genMapIndex[i];
+                        if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[mi].bounds)) {
+                            nearbyGenIndex = i;
+                            if (IsKeyPressed(KEY_E)) {
+                                OpenPuzzle(&genPuzzles[i]);
+                                activeGenIndex = i;
+                            }
+                            break;
+                        }
+                    }
+
+                    // ── ORION activation gate (requires all gens solved) ─────
+                    if (map.hasNextActTrigger && gensSolvedCount >= genCount && genCount > 0) {
+                        if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
+                            nearOrionTrigger = true;
+                            if (IsKeyPressed(KEY_E)) {
+                                nearOrionTrigger = false;
+                                SetupAct(2); // Load Act 3 map NOW so player is already there
+                                LoadDialogueFile("../assets/dialogue/act3.txt");
+                                return DIALOGUE;
+                            }
+                        }
                     }
                 }
             } else if (currentAct == 2) {
-                // Act 3 objective logic (future: level 3 transition)
+                // ── Act 3 Interactables (Image viewers & RGB Puzzle) ─────────
+                nearbyImageIndex = -1;
+                rgbNearby = false;
+                
+                Rectangle playerHitbox = {
+                    player.position.x, player.position.y,
+                    player.frameRec.width * player.scale, player.frameRec.height * player.scale
+                };
+
+                // Check image viewers proximity
+                for (int i = 0; i < 2; i++) {
+                    if (imageMapIndex[i] >= 0) {
+                        if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[imageMapIndex[i]].bounds)) {
+                            nearbyImageIndex = i;
+                            if (IsKeyPressed(KEY_E)) {
+                                activeImageIndex = i;
+                            }
+                            break;
+                        }
+                    }
+                }
+                
+                // Check CodePuzzle proximity
+                if (codePuzzleMapIndex >= 0 && !codePuzzle.solved && nearbyImageIndex < 0) {
+                    if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[codePuzzleMapIndex].bounds)) {
+                        codePuzzleNearby = true;
+                        if (IsKeyPressed(KEY_E)) {
+                            OpenCodePuzzle(&codePuzzle);
+                        }
+                    }
+                }
+                
+                // Check rgb puzzle proximity
+                if (rgbMapIndex >= 0 && !rgbPuzzle.solved && nearbyImageIndex < 0) {
+                    if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[rgbMapIndex].bounds)) {
+                        rgbNearby = true;
+                        if (IsKeyPressed(KEY_E)) {
+                            OpenRGBPuzzle(&rgbPuzzle);
+                        }
+                    }
+                }
+                
+                // ── Act 3 Exit Gate (requires both keycards) ─────
+                nearAct3Exit = false;
+                if (map.hasNextActTrigger) {
+                    if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
+                        nearAct3Exit = true;
+                        if (IsKeyPressed(KEY_E)) {
+                            if (hasKeycardA && hasKeycardB) {
+                                nearAct3Exit = false;
+                                // Wait for act 4 or transition logic
+                                printf("Both keycards acquired. Ready to transition!\n");
+                            } else {
+                                // Missing keycards
+                                pickupTimer = 3.0f;
+                                pickupText = "Requires Keycard A and Keycard B";
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -355,8 +629,8 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     if (CheckCollisionCircleRec(bPos, playerWeapon.bullets[b].radius, enemyBounds)) {
                         // Bullet hits enemy
                         playerWeapon.bullets[b].active = false;
-                        if (currentAct <= 1) {
-                            // Act 1 (Prologue): stun only — no damage
+                        if (currentAct <= 2) {
+                            // Act 1 to 3: stun only — no damage until Level 3 map!
                             StunEnemy(&enemies[i]);
                             TriggerShake(2.0f, 0.08f);
                         } else {
@@ -430,6 +704,16 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     enemies[i].waypointIndex = 0;
                     enemies[i].navPathActive = false;
                 }
+
+                // Reset generator puzzle progress
+                for (int i = 0; i < genCount; i++) {
+                    genSolved[i] = false;
+                    InitPuzzle(&genPuzzles[i]); // Re-shuffle wires
+                }
+                gensSolvedCount = 0;
+                nearbyGenIndex = -1;
+                activeGenIndex = -1;
+                nearOrionTrigger = false;
             }
         }
         return GAMEPLAY;
@@ -469,8 +753,9 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
         return GAMEPLAY;
     }
 
-    // ── Screen shake decay ────────────────────────────────────────────────────
+    // ── Timers ────────────────────────────────────────────────────────────────
     if (shakeTimer > 0.0f) shakeTimer -= dt;
+    if (pickupTimer > 0.0f) pickupTimer -= dt;
 
     return GAMEPLAY;
 }
@@ -494,6 +779,87 @@ void DrawScreenGameplay(void)
         DrawWeapon(&playerWeapon);
         for (int i = 0; i < enemyCount; i++) DrawEnemy(&enemies[i]);
         DrawCharacter(&player);
+
+        // ── World-space green checkmark on solved generators ──────────────────
+        if (currentAct == 1) {
+            for (int i = 0; i < genCount; i++) {
+                if (genSolved[i]) {
+                    int mi = genMapIndex[i];
+                    Rectangle b = map.puzzleObjects[mi].bounds;
+                    float cx = b.x + b.width / 2.0f;
+                    float cy = b.y + b.height / 2.0f;
+                    // Green checkmark
+                    DrawLineEx((Vector2){cx - 8, cy},     (Vector2){cx - 2, cy + 8}, 3, GREEN);
+                    DrawLineEx((Vector2){cx - 2, cy + 8}, (Vector2){cx + 10, cy - 6}, 3, GREEN);
+                }
+            }
+        }
+        // ── World-space "Press E" prompts above targets ───────────────────────────
+        {
+            float targetCenterX = 0.0f;
+            float targetTopY = 0.0f;
+            const char* prompt = NULL;
+
+            // Character prompt
+            if (nearbyCharacterIndex >= 0 && !isInGameDialogue) {
+                prompt = "Press \"E\" to talk";
+                targetCenterX = map.characterObjects[nearbyCharacterIndex].bounds.x + map.characterObjects[nearbyCharacterIndex].bounds.width / 2.0f;
+                targetTopY = map.characterObjects[nearbyCharacterIndex].bounds.y - 5.0f;
+            }
+            // Generator prompt
+            else if (nearbyGenIndex >= 0 && activeGenIndex < 0 && !genSolved[nearbyGenIndex]) {
+                prompt = "Press \"E\" to interact";
+                int mi = genMapIndex[nearbyGenIndex];
+                targetCenterX = map.puzzleObjects[mi].bounds.x + map.puzzleObjects[mi].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[mi].bounds.y - 5.0f;
+            }
+            // ORION activation prompt
+            else if (nearOrionTrigger && nearbyGenIndex < 0 && activeGenIndex < 0) {
+                prompt = "Press \"E\" to activate ORION";
+                targetCenterX = map.nextActTrigger.x + map.nextActTrigger.width / 2.0f;
+                targetTopY = map.nextActTrigger.y - 5.0f;
+            }
+            // Act 3 Image viewer prompt
+            else if (nearbyImageIndex >= 0 && activeImageIndex < 0) {
+                prompt = "Press \"E\" to read";
+                int mi = imageMapIndex[nearbyImageIndex];
+                targetCenterX = map.puzzleObjects[mi].bounds.x + map.puzzleObjects[mi].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[mi].bounds.y - 5.0f;
+            }
+            // Act 3 RGB Puzzle prompt
+            else if (rgbNearby && !rgbPuzzle.active && !rgbPuzzle.solved) {
+                prompt = "Press \"E\" to interact";
+                targetCenterX = map.puzzleObjects[rgbMapIndex].bounds.x + map.puzzleObjects[rgbMapIndex].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[rgbMapIndex].bounds.y - 5.0f;
+            }
+            // Act 3 Code Puzzle prompt
+            else if (codePuzzleNearby && !codePuzzle.active && !codePuzzle.solved) {
+                prompt = "Press \"E\" to interact";
+                targetCenterX = map.puzzleObjects[codePuzzleMapIndex].bounds.x + map.puzzleObjects[codePuzzleMapIndex].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[codePuzzleMapIndex].bounds.y - 5.0f;
+            }
+            // Act 3 Exit prompt
+            else if (nearAct3Exit && nearbyImageIndex < 0 && !rgbNearby) {
+                prompt = "Press \"E\" to proceed";
+                targetCenterX = map.nextActTrigger.x + map.nextActTrigger.width / 2.0f;
+                targetTopY = map.nextActTrigger.y - 5.0f;
+            }
+
+            if (prompt) {
+                int pw = MeasureText(prompt, 10);
+                int tx = (int)(targetCenterX - pw / 2);
+                int ty = (int)(targetTopY - 12);
+                
+                // Draw textbox background
+                int paddingX = 4;
+                int paddingY = 2;
+                DrawRectangle(tx - paddingX, ty - paddingY, pw + paddingX * 2, 10 + paddingY * 2, Fade(BLACK, 0.75f));
+                DrawRectangleLines(tx - paddingX, ty - paddingY, pw + paddingX * 2, 10 + paddingY * 2, DARKGRAY);
+
+                // Text fill on top
+                DrawText(prompt, tx, ty, 10, YELLOW);
+            }
+        }
     EndMode2D();
 
     // ── HUD (screen-space, no camera transform) ───────────────────────────────
@@ -515,12 +881,13 @@ void DrawScreenGameplay(void)
             objStates[0] = objMoveDone; objStates[1] = objDashDone; objStates[2] = objShootDone; objStates[3] = objEvacuateDone;
             numObjectives = 4;
         } else if (currentAct == 1) {
-            objTexts[0] = "Explore the area";
-            objStates[0] = false;
+            objTexts[0] = TextFormat("Activate generators (%d/%d)", gensSolvedCount, genCount);
+            objStates[0] = (gensSolvedCount >= genCount && genCount > 0);
             numObjectives = 1;
         } else if (currentAct == 2) {
-            objTexts[0] = "Continue forward";
-            objStates[0] = false;
+            int cards = (hasKeycardA ? 1 : 0) + (hasKeycardB ? 1 : 0);
+            objTexts[0] = TextFormat("Collect keycards (%d/2)", cards);
+            objStates[0] = (cards == 2);
             numObjectives = 1;
         }
 
@@ -557,6 +924,55 @@ void DrawScreenGameplay(void)
     }
 
     DrawText("Ignore enemy visual cone, they can't see through walls!!", 20, textYpos, 20, RAYWHITE);
+
+    // ("Press E" prompts are now drawn in world-space above the player head)
+
+    // ── In-Game Dialogue Overlay ──────────────────────────────────────────────
+    if (isInGameDialogue) {
+        DrawScreenDialogue(); // Fills screen perfectly due to native transparent backgrounds
+    }
+
+    // ── Puzzle overlay (on top of everything) ─────────────────────────────────
+    if (activeGenIndex >= 0) {
+        DrawPuzzle(&genPuzzles[activeGenIndex]);
+    }
+    
+    if (rgbPuzzle.active) {
+        DrawRGBPuzzle(&rgbPuzzle);
+    }
+    
+    if (activeImageIndex >= 0) {
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.85f));
+        Texture2D tex = (activeImageIndex == 0) ? imgCode : imgRule;
+        if (tex.id != 0) {
+            float scale = fminf((float)VIRTUAL_WIDTH * 0.9f / tex.width, (float)VIRTUAL_HEIGHT * 0.9f / tex.height);
+            Vector2 pos = { (VIRTUAL_WIDTH - tex.width * scale) / 2.0f, (VIRTUAL_HEIGHT - tex.height * scale) / 2.0f };
+            DrawTextureEx(tex, pos, 0.0f, scale, WHITE);
+            
+            const char* hint = "Press 'E' to close";
+            int hw = MeasureText(hint, 20);
+            DrawText(hint, (VIRTUAL_WIDTH - hw)/2, VIRTUAL_HEIGHT - 40, 20, GRAY);
+        }
+    }
+
+    if (codePuzzle.active) {
+        DrawCodePuzzle(&codePuzzle);
+    }
+
+    // Draw pickup notification popups
+    if (pickupTimer > 0.0f && pickupText[0] != '\0') {
+        int pw = MeasureText(pickupText, 30);
+        int px = (VIRTUAL_WIDTH - pw) / 2;
+        int py = 80;
+        
+        float alpha = (pickupTimer < 1.0f) ? pickupTimer : 1.0f;
+        Color bg = Fade(BLACK, 0.7f * alpha);
+        Color fg = Fade(YELLOW, alpha);
+        
+        DrawRectangle(px - 20, py - 10, pw + 40, 50, bg);
+        DrawRectangleLines(px - 20, py - 10, pw + 40, 50, Fade(DARKGRAY, alpha));
+        DrawText(pickupText, px, py, 30, fg);
+    }
 
     // Lives counter in the top right
     const char* hudLivesText = TextFormat("Lives: %d", playerLives);
@@ -661,6 +1077,19 @@ void UnloadScreenGameplay(void)
     // Unload shared enemy textures
     if (enemySpriteR.id != 0) UnloadTexture(enemySpriteR);
     if (enemySpriteL.id != 0) UnloadTexture(enemySpriteL);
+    
+    // Unload puzzle assets
+    if (imgCode.id != 0) UnloadTexture(imgCode);
+    if (codePuzzle.bgTexture.id != 0) {
+        UnloadTexture(codePuzzle.bgTexture);
+        codePuzzle.bgTexture = (Texture2D){0};
+    }
+    if (imgRule.id != 0) UnloadTexture(imgRule);
+    if (rgbPuzzle.textures[0].id != 0) UnloadTexture(rgbPuzzle.textures[0]);
+    if (rgbPuzzle.textures[1].id != 0) UnloadTexture(rgbPuzzle.textures[1]);
+    if (rgbPuzzle.textures[2].id != 0) UnloadTexture(rgbPuzzle.textures[2]);
+    if (sfxButton.frameCount > 0) UnloadSound(sfxButton);
+    if (sfxFail.frameCount > 0) UnloadSound(sfxFail);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -677,6 +1106,10 @@ void GetGameplaySaveData(SaveData* data)
     data->lives          = playerLives;
     data->currentAct     = currentAct;
     data->currentChapter = currentChapter;
+    
+    // Inventory
+    data->hasKeycardA    = hasKeycardA;
+    data->hasKeycardB    = hasKeycardB;
 
     data->enemyCount = enemyCount;
     for (int i = 0; i < enemyCount && i < SAVE_MAX_ENEMIES; i++) {
@@ -709,6 +1142,10 @@ void RestoreGameplayFromSave(const SaveData* data)
     player.position.y = data->playerY;
     player.health     = data->playerHealth;
     player.stamina    = data->playerStamina;
+    
+    // Inventory
+    hasKeycardA = data->hasKeycardA;
+    hasKeycardB = data->hasKeycardB;
 
     // Reset death states on load
     isPlayerDead   = false;

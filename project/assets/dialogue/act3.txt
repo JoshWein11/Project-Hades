@@ -1,2 +1,40 @@
-CMD|TITLE|ACT 3 : The Unknown
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+CMD|BG|stage2_cutscene1.qoi
+CMD|BGM|bgm2.wav
+CMD|WAIT|1.0
+---
+ADRIAN|left
+ORION... you're my only hope
+---
+ADRIAN|left
+If I can get you back online, maybe I can make sense of this chaos.
+---
+ADRIAN|left
+Alright... Time to wake the ghost.
+---
+CMD|BG|stage2_cutscene2.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+ORION, can you hear me?
+---
+ORION|right
+User detected. Dr. Adrian Voss.
+---
+ORION|right
+Facility Status: Critical. Multiple lifeforms active.
+---
+ADRIAN|left
+I need guidance. Can you help me navigate?
+---
+ORION|right
+I can provide partial assistance. Certain doors may be unlocked.
+---
+ORION|right
+Environmental Controls: Offline. Full system recovery required for complete access.
+---
+ADRIAN|left
+Good enough. Get me to the Central Control Chamber.
 ---

@@ -29,6 +29,10 @@ typedef struct {
     int   lives;            // Remaining lives (starts at 5)
     int   currentAct;       // Which Act the player is in (0-based)
     int   currentChapter;   // Which Chapter within the Act (0-based)
+    
+    // Inventory
+    bool  hasKeycardA;
+    bool  hasKeycardB;
 } SaveData;
 
 // Writes the SaveData struct to a binary file. Returns true on success.

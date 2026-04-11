@@ -1,0 +1,14 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+This one might be hard.
+---
+ORION|left
+You need to press the code in the correct order.
+---
+ORION|left
+There's a total of 5 round, each round get harder.
+---
+ORION|left
+Good luck
+---

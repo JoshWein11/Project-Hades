@@ -1,0 +1,14 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+This is a RGB puzzle. We need to complete to get keycard A.
+---
+ORION|left
+Press the button according to the code given
+---
+ORION|left
+There're 3 rounds, you need to press the button every 4,3,2 second, respectively
+---
+ORION|left
+Good luck
+---
