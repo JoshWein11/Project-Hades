@@ -18,9 +18,9 @@ static MapData   map;
 static Weapon    playerWeapon;
 static Camera2D  camera = { 0 };
 
-// Shared enemy sprite textures — loaded once, used by all enemies
-static Texture2D enemySpriteR;
-static Texture2D enemySpriteL;
+// Shared enemy sprite textures — one pair per EnemyType, loaded once per act
+static Texture2D enemySpriteR[ENEMY_TYPE_COUNT];
+static Texture2D enemySpriteL[ENEMY_TYPE_COUNT];
 
 static bool isPaused = false;
 
@@ -72,6 +72,19 @@ static Sound     sfxButton;
 static Sound     sfxFail;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Level 3 Puzzle System (Act 4)
+// ─────────────────────────────────────────────────────────────────────────────
+static Texture2D imgNote2;
+static int       note2MapIndex = -1;
+static bool      note2Active = false;
+
+static int       sequenceBtnIndices[4] = {-1, -1, -1, -1}; // 0=RED, 1=YELLOW, 2=BLUE, 3=GREEN
+static int       nearbySequenceBtn = -1;
+static int       sequenceProgress = 0;
+static bool      act4DoorUnlocked = false;
+static bool      nearAct4Exit = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Keycard & Popup System (Act 3)
 // ─────────────────────────────────────────────────────────────────────────────
 static bool hasKeycardA = false;
@@ -85,6 +98,7 @@ static bool nearAct3Exit = false;
 // ─────────────────────────────────────────────────────────────────────────────
 static bool isInGameDialogue = false;
 static int nearbyCharacterIndex = -1;
+static bool forceDialogueTriggered = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy list — increase capacity and call InitEnemy multiple times to add more.
@@ -93,10 +107,10 @@ static int nearbyCharacterIndex = -1;
 //     Edit 'patrolPoints' and pass them to InitEnemy with the desired spawnPos.
 //
 //   Giving an enemy a sprite:
-//     Replace NULL with a path string, e.g. "../assets/character/enemy.png",
+//     Replace NULL with a path string, e.g. "../assets/enemy/slime_abberant_r.png",
 //     and set the correct frameWidth / frameHeight for your sprite sheet.
 // ─────────────────────────────────────────────────────────────────────────────
-#define MAX_ENEMIES 30
+#define MAX_ENEMIES 50
 static Enemy enemies[MAX_ENEMIES];
 static int   enemyCount = 0;
 
@@ -134,6 +148,7 @@ static void TriggerShake(float magnitude, float duration) {
 //
 //   Unnamed points → stationary enemy (1 waypoint).
 //   Points with the same name → one enemy patrolling between those waypoints.
+//   The first character of the name determines the sprite: s/r/w/m.
 // ─────────────────────────────────────────────────────────────────────────────
 static void SpawnEnemiesFromMap(void)
 {
@@ -141,9 +156,9 @@ static void SpawnEnemiesFromMap(void)
 
     printf("[Enemy] Total spawn points from map: %d\n", map.enemySpawnCount);
     for (int d = 0; d < map.enemySpawnCount; d++) {
-        printf("[Enemy]   spawn[%d] pos=(%.0f, %.0f) group='%s'\n",
+        printf("[Enemy]   spawn[%d] pos=(%.0f, %.0f) group='%s' type=%d\n",
                d, map.enemySpawns[d].position.x, map.enemySpawns[d].position.y,
-               map.enemySpawns[d].group);
+               map.enemySpawns[d].group, map.enemySpawns[d].type);
     }
 
     for (int i = 0; i < map.enemySpawnCount; i++) {
@@ -151,14 +166,28 @@ static void SpawnEnemiesFromMap(void)
 
         EnemySpawnPoint* sp = &map.enemySpawns[i];
 
-        if (sp->group[0] == '\0') {
+        // Stationary = unnamed OR type-only name (no underscore, e.g. "s", "r", "w", "m")
+        // Patrol     = name contains underscore (e.g. "s_1", "r_1")
+        bool isStationary = (sp->group[0] == '\0') || (strchr(sp->group, '_') == NULL);
+
+        if (isStationary) {
             // ── Stationary enemy: single waypoint ──────────────────────────
             if (enemyCount < MAX_ENEMIES) {
+                EnemyType t = sp->type;
+                EnemyBehavior beh = (t == ENEMY_TYPE_MUSHROOM) ? BEHAVIOR_MUSHROOM : BEHAVIOR_PATROL;
+                int fw = 32, fh = 32;
+                float sc = 0.67f;
+                if (t == ENEMY_TYPE_MUSHROOM) {
+                    // Use full texture size for mushroom (bigger sprite)
+                    fw = enemySpriteR[t].width;
+                    fh = enemySpriteR[t].height;
+                    sc = 1.0f;
+                }
                 Vector2 pts[] = { sp->position };
                 InitEnemy(&enemies[enemyCount++], sp->position, pts, 1,
-                    enemySpriteR, enemySpriteL, 32, 32, 0.67f);
-                printf("[Enemy] Spawned STATIONARY enemy #%d at (%.0f, %.0f)\n",
-                       enemyCount, sp->position.x, sp->position.y);
+                    enemySpriteR[t], enemySpriteL[t], fw, fh, sc, beh);
+                printf("[Enemy] Spawned STATIONARY enemy #%d type=%d at (%.0f, %.0f)\n",
+                       enemyCount, t, sp->position.x, sp->position.y);
             } else {
                 printf("[Enemy] SKIPPED stationary at (%.0f, %.0f) — MAX_ENEMIES reached\n",
                        sp->position.x, sp->position.y);
@@ -179,10 +208,19 @@ static void SpawnEnemiesFromMap(void)
             }
 
             if (enemyCount < MAX_ENEMIES && wpCount > 0) {
+                EnemyType t = sp->type;
+                EnemyBehavior beh = (t == ENEMY_TYPE_MUSHROOM) ? BEHAVIOR_MUSHROOM : BEHAVIOR_PATROL;
+                int fw = 32, fh = 32;
+                float sc = 0.67f;
+                if (t == ENEMY_TYPE_MUSHROOM) {
+                    fw = enemySpriteR[t].width;
+                    fh = enemySpriteR[t].height;
+                    sc = 1.0f;
+                }
                 InitEnemy(&enemies[enemyCount++], waypoints[0], waypoints, wpCount,
-                    enemySpriteR, enemySpriteL, 32, 32, 0.67f);
-                printf("[Enemy] Spawned PATROL enemy #%d group='%s' with %d waypoints\n",
-                       enemyCount, sp->group, wpCount);
+                    enemySpriteR[t], enemySpriteL[t], fw, fh, sc, beh);
+                printf("[Enemy] Spawned PATROL enemy #%d type=%d group='%s' with %d waypoints\n",
+                       enemyCount, t, sp->group, wpCount);
             } else {
                 printf("[Enemy] SKIPPED patrol group '%s' — MAX_ENEMIES reached or no waypoints\n",
                        sp->group);
@@ -203,9 +241,11 @@ static void SetupAct(int act)
     for (int i = 0; i < enemyCount; i++) UnloadEnemy(&enemies[i]);
     enemyCount = 0;
 
-    // Unload previous shared enemy textures
-    if (enemySpriteR.id != 0) { UnloadTexture(enemySpriteR); enemySpriteR = (Texture2D){0}; }
-    if (enemySpriteL.id != 0) { UnloadTexture(enemySpriteL); enemySpriteL = (Texture2D){0}; }
+    // Unload previous shared enemy textures (all types)
+    for (int t = 0; t < ENEMY_TYPE_COUNT; t++) {
+        if (enemySpriteR[t].id != 0) { UnloadTexture(enemySpriteR[t]); enemySpriteR[t] = (Texture2D){0}; }
+        if (enemySpriteL[t].id != 0) { UnloadTexture(enemySpriteL[t]); enemySpriteL[t] = (Texture2D){0}; }
+    }
 
     currentAct = act;
 
@@ -213,8 +253,14 @@ static void SetupAct(int act)
         case 0: // ACT 1 — Prologue (stun-only bullets)
             LoadTiledMap(&map, "../assets/map/trial.json");
             chapterSpawnPos = (Vector2){ 600, 867 };
-            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
-            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
+            enemySpriteL[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_r.png");
+            enemySpriteL[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_l.png");
+            enemySpriteR[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_r.png");
+            enemySpriteL[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_l.png");
+            enemySpriteR[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_r.png");
+            enemySpriteL[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_l.png");
             SpawnEnemiesFromMap();
             objMoveDone = false;
             objDashDone = false;
@@ -226,8 +272,12 @@ static void SetupAct(int act)
         case 1: // ACT 2 — Level 1 (checkpoint map, stun-only)
             LoadTiledMap(&map, "../assets/map/level 1.json");
             chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
-            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
-            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
+            enemySpriteL[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_r.png");
+            enemySpriteL[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_l.png");
+            enemySpriteR[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_r.png");
+            enemySpriteL[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_l.png");
             SpawnEnemiesFromMap();
             displayObjectives = true;
 
@@ -251,8 +301,12 @@ static void SetupAct(int act)
         case 2: // ACT 3 — Level 2 (full damage)
             LoadTiledMap(&map, "../assets/map/level 2.json");
             chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
-            enemySpriteR = LoadTexture("../assets/character/slime_abberant_r.png");
-            enemySpriteL = LoadTexture("../assets/character/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
+            enemySpriteL[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_r.png");
+            enemySpriteL[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_l.png");
+            enemySpriteR[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_r.png");
+            enemySpriteL[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_l.png");
             SpawnEnemiesFromMap();
             displayObjectives = true;
             
@@ -284,6 +338,59 @@ static void SetupAct(int act)
                     codePuzzleMapIndex = i;
                 }
             }
+            break;
+
+        case 3: // ACT 4 — Level 3 (full damage)
+            LoadTiledMap(&map, "../assets/map/level 3.json");
+            chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
+            enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
+            enemySpriteL[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_r.png");
+            enemySpriteL[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_l.png");
+            enemySpriteR[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_r.png");
+            enemySpriteL[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_l.png");
+            enemySpriteR[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_r.png");
+            enemySpriteL[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_l.png");
+            SpawnEnemiesFromMap();
+            displayObjectives = true;
+
+            // Setup Level 3 puzzle state
+            note2MapIndex = -1;
+            note2Active = false;
+            for (int i = 0; i < 4; i++) sequenceBtnIndices[i] = -1;
+            nearbySequenceBtn = -1;
+            sequenceProgress = 0;
+            act4DoorUnlocked = false;
+            nearAct4Exit = false;
+
+            for (int i = 0; i < map.puzzleObjectCount; i++) {
+                if (strcmp(map.puzzleObjects[i].name, "note2") == 0) {
+                    note2MapIndex = i;
+                } else if (strcmp(map.puzzleObjects[i].name, "red") == 0) {
+                    sequenceBtnIndices[0] = i;
+                } else if (strcmp(map.puzzleObjects[i].name, "yellow") == 0) {
+                    sequenceBtnIndices[1] = i;
+                } else if (strcmp(map.puzzleObjects[i].name, "blue") == 0) {
+                    sequenceBtnIndices[2] = i;
+                } else if (strcmp(map.puzzleObjects[i].name, "green") == 0) {
+                    sequenceBtnIndices[3] = i;
+                }
+            }
+            break;
+
+        case 4: // ACT 5 — Level 4 (final levels setup stub)
+            LoadTiledMap(&map, "../assets/map/level 4.json");
+            chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
+            enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
+            enemySpriteL[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_l.png");
+            enemySpriteR[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_r.png");
+            enemySpriteL[ENEMY_TYPE_WORKER]   = LoadTexture("../assets/enemy/worker_l.png");
+            enemySpriteR[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_r.png");
+            enemySpriteL[ENEMY_TYPE_RAT]      = LoadTexture("../assets/enemy/rat_l.png");
+            enemySpriteR[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_r.png");
+            enemySpriteL[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_l.png");
+            SpawnEnemiesFromMap();
+            displayObjectives = true;
             break;
 
         default:
@@ -323,10 +430,12 @@ void InitScreenGameplay(void)
     isGameOver     = false;
     deathFadeAlpha = 0.0f;
     currentChapter = 0;
+    forceDialogueTriggered = false;
 
     // ── Load Act 3 specific puzzle assets ─────────────────────────────────────
     imgCode = LoadTexture("../assets/images/code.png");
     imgRule = LoadTexture("../assets/images/rule.png");
+    imgNote2 = LoadTexture("../assets/images/code_2.png");
     Texture2D bg1 = LoadTexture("../assets/images/puzzle/rgb_1.png");
     Texture2D bg2 = LoadTexture("../assets/images/puzzle/rgb_2.png");
     Texture2D bg3 = LoadTexture("../assets/images/puzzle/rgb_3.png");
@@ -389,6 +498,11 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
         player.position.x + (player.frameRec.width  * player.scale) / 2.0f,
         player.position.y + (player.frameRec.height * player.scale) / 2.0f
     };
+    
+    // Apply dynamic dialogue-driven camera shift
+    Vector2 camShift = GetDialogueCameraOffset();
+    camera.target.x += camShift.x;
+    camera.target.y += camShift.y;
 
     Vector2 mouseWorldPos = GetScreenToWorld2D(GetVirtualMouse(), camera);
 
@@ -407,7 +521,9 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
         // ── Code Puzzle Active: freeze gameplay ─────────────────────────────
         if (codePuzzle.active) {
-            if (UpdateCodePuzzle(&codePuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
+            if (IsKeyPressed(KEY_E)) {
+                codePuzzle.active = false;
+            } else if (UpdateCodePuzzle(&codePuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
                 // Puzzle solved!
                 printf("[Puzzle] Code Memory Match solved!\n");
                 hasKeycardB = true;
@@ -425,9 +541,19 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             return GAMEPLAY; // Skip all other gameplay updates while image is open
         }
 
+        // ── Note2 Viewer Active: freeze gameplay, wait for 'E' to close ───────
+        if (note2Active) {
+            if (IsKeyPressed(KEY_E)) {
+                note2Active = false; // Close image view
+            }
+            return GAMEPLAY; // Skip all other gameplay updates while note is open
+        }
+
         // ── RGB Puzzle Active: freeze gameplay, process rhythms ───────────────
         if (rgbPuzzle.active) {
-            if (UpdateRGBPuzzle(&rgbPuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
+            if (IsKeyPressed(KEY_E)) {
+                rgbPuzzle.active = false;
+            } else if (UpdateRGBPuzzle(&rgbPuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
                 // Puzzle just solved!
                 printf("[Puzzle] RGB Timing Game solved!\n");
                 hasKeycardA = true;
@@ -465,6 +591,20 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                 player.position.x, player.position.y,
                 player.frameRec.width * player.scale, player.frameRec.height * player.scale
             };
+            
+            // Force Dialogue trigger
+            if (!forceDialogueTriggered) {
+                for (int i = 0; i < map.forceDialogueObjectCount; i++) {
+                    if (CheckCollisionRecs(playerHitbox, map.forceDialogueObjects[i].bounds)) {
+                        forceDialogueTriggered = true;
+                        char filepath[128];
+                        snprintf(filepath, sizeof(filepath), "../assets/dialogue/character/%s.txt", map.forceDialogueObjects[i].name);
+                        LoadDialogueFile(filepath);
+                        isInGameDialogue = true;
+                        break;
+                    }
+                }
+            }
             
             for (int i = 0; i < map.characterObjectCount; i++) {
                 if (CheckCollisionRecs(playerHitbox, map.characterObjects[i].bounds)) {
@@ -588,12 +728,75 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                         if (IsKeyPressed(KEY_E)) {
                             if (hasKeycardA && hasKeycardB) {
                                 nearAct3Exit = false;
-                                // Wait for act 4 or transition logic
-                                printf("Both keycards acquired. Ready to transition!\n");
+                                SetupAct(3); // Load Act 4 map NOW
+                                LoadDialogueFile("../assets/dialogue/act4.txt");
+                                return DIALOGUE;
                             } else {
                                 // Missing keycards
                                 pickupTimer = 3.0f;
                                 pickupText = "Requires Keycard A and Keycard B";
+                            }
+                        }
+                    }
+                }
+            } else if (currentAct == 3) {
+                // ── Act 4 (Level 3) Interactables ─────────
+                nearbySequenceBtn = -1;
+                nearAct4Exit = false;
+
+                Rectangle playerHitbox = {
+                    player.position.x, player.position.y,
+                    player.frameRec.width * player.scale, player.frameRec.height * player.scale
+                };
+
+                // Check note2 proximity
+                if (note2MapIndex >= 0 && note2Active == false) {
+                    if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[note2MapIndex].bounds)) {
+                        if (IsKeyPressed(KEY_E)) {
+                            note2Active = true;
+                        }
+                    }
+                }
+
+                // Check sequence buttons proximity
+                if (!act4DoorUnlocked) {
+                    for (int i = 0; i < 4; i++) {
+                        if (sequenceBtnIndices[i] >= 0) {
+                            if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[sequenceBtnIndices[i]].bounds)) {
+                                nearbySequenceBtn = i;
+                                if (IsKeyPressed(KEY_E)) {
+                                    if (i == sequenceProgress) {
+                                        sequenceProgress++;
+                                        PlaySound(sfxButton);
+                                        if (sequenceProgress >= 4) {
+                                            act4DoorUnlocked = true;
+                                            pickupTimer = 4.0f;
+                                            pickupText = "DOOR UNLOCKED";
+                                        }
+                                    } else {
+                                        sequenceProgress = 0;
+                                        PlaySound(sfxFail);
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // ── Act 4 Exit Gate ─────
+                if (map.hasNextActTrigger) {
+                    if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
+                        nearAct4Exit = true;
+                        if (IsKeyPressed(KEY_E)) {
+                            if (act4DoorUnlocked) {
+                                nearAct4Exit = false;
+                                SetupAct(4); // Load next map
+                                LoadDialogueFile("../assets/dialogue/act5.txt");
+                                return DIALOGUE;
+                            } else {
+                                pickupTimer = 3.0f;
+                                pickupText = "Sequence Incomplete";
                             }
                         }
                     }
@@ -642,8 +845,9 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                 }
             }
 
-            // ── Enemy hits Player ─────────────────────────────────────────────
-            if (player.hitInvincibleTimer <= 0.0f && !player.playerInvincible) {
+            // ── Enemy hits Player (contact — skip for mushrooms) ─────────────
+            if (enemies[i].behavior != BEHAVIOR_MUSHROOM &&
+                player.hitInvincibleTimer <= 0.0f && !player.playerInvincible) {
                 Rectangle playerBounds = {
                     player.position.x,
                     player.position.y,
@@ -657,6 +861,26 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     if (player.health < 0.0f) player.health = 0.0f;
                     player.hitInvincibleTimer = 1.0f; // 1 second of i-frames
                     TriggerShake(8.0f, 0.20f);
+                }
+            }
+
+            // ── Mushroom Poison Projectile Collision ──────────────────────────
+            if (enemies[i].behavior == BEHAVIOR_MUSHROOM) {
+                for (int p = 0; p < ENEMY_MAX_PROJECTILES; p++) {
+                    EnemyProjectile* proj = &enemies[i].projectiles[p];
+                    if (!proj->active || !proj->isSplattered) continue;
+                    Rectangle playerBounds = {
+                        player.position.x, player.position.y,
+                        player.frameRec.width * player.scale,
+                        player.frameRec.height * player.scale
+                    };
+                    if (CheckCollisionCircleRec(proj->position, proj->radius, playerBounds)) {
+                        // Continuous DPS while overlapping
+                        if (player.hitInvincibleTimer <= 0.0f) {
+                            player.health -= proj->damagePerSec * dt;
+                            if (player.health < 0.0f) player.health = 0.0f;
+                        }
+                    }
                 }
             }
         }
@@ -731,6 +955,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             isGameOver     = false;
             playerLives    = STARTING_LIVES;
             deathFadeAlpha = 0.0f;
+            forceDialogueTriggered = false;
 
             if (currentAct >= 1) {
                 // Always respawn at Act 1 (level 1.json) checkpoint
@@ -844,6 +1069,24 @@ void DrawScreenGameplay(void)
                 targetCenterX = map.nextActTrigger.x + map.nextActTrigger.width / 2.0f;
                 targetTopY = map.nextActTrigger.y - 5.0f;
             }
+            // Act 4 Note2 prompt
+            else if (note2MapIndex >= 0 && !note2Active && CheckCollisionRecs((Rectangle){player.position.x, player.position.y, player.frameRec.width * player.scale, player.frameRec.height * player.scale}, map.puzzleObjects[note2MapIndex].bounds)) {
+                prompt = "Press \"E\" to read";
+                targetCenterX = map.puzzleObjects[note2MapIndex].bounds.x + map.puzzleObjects[note2MapIndex].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[note2MapIndex].bounds.y - 5.0f;
+            }
+            // Act 4 Sequence buttons prompt
+            else if (nearbySequenceBtn >= 0 && !act4DoorUnlocked) {
+                prompt = "Press \"E\" to interact";
+                targetCenterX = map.puzzleObjects[sequenceBtnIndices[nearbySequenceBtn]].bounds.x + map.puzzleObjects[sequenceBtnIndices[nearbySequenceBtn]].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[sequenceBtnIndices[nearbySequenceBtn]].bounds.y - 5.0f;
+            }
+            // Act 4 Exit prompt
+            else if (nearAct4Exit) {
+                prompt = act4DoorUnlocked ? "Press \"E\" to proceed" : "Locked";
+                targetCenterX = map.nextActTrigger.x + map.nextActTrigger.width / 2.0f;
+                targetTopY = map.nextActTrigger.y - 5.0f;
+            }
 
             if (prompt) {
                 int pw = MeasureText(prompt, 10);
@@ -888,6 +1131,10 @@ void DrawScreenGameplay(void)
             int cards = (hasKeycardA ? 1 : 0) + (hasKeycardB ? 1 : 0);
             objTexts[0] = TextFormat("Collect keycards (%d/2)", cards);
             objStates[0] = (cards == 2);
+            numObjectives = 1;
+        } else if (currentAct == 3) {
+            objTexts[0] = TextFormat("Activate the door (%d/4)", sequenceProgress);
+            objStates[0] = act4DoorUnlocked;
             numObjectives = 1;
         }
 
@@ -948,6 +1195,19 @@ void DrawScreenGameplay(void)
             float scale = fminf((float)VIRTUAL_WIDTH * 0.9f / tex.width, (float)VIRTUAL_HEIGHT * 0.9f / tex.height);
             Vector2 pos = { (VIRTUAL_WIDTH - tex.width * scale) / 2.0f, (VIRTUAL_HEIGHT - tex.height * scale) / 2.0f };
             DrawTextureEx(tex, pos, 0.0f, scale, WHITE);
+            
+            const char* hint = "Press 'E' to close";
+            int hw = MeasureText(hint, 20);
+            DrawText(hint, (VIRTUAL_WIDTH - hw)/2, VIRTUAL_HEIGHT - 40, 20, GRAY);
+        }
+    }
+
+    if (note2Active) {
+        DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.85f));
+        if (imgNote2.id != 0) {
+            float scale = fminf((float)VIRTUAL_WIDTH * 0.9f / imgNote2.width, (float)VIRTUAL_HEIGHT * 0.9f / imgNote2.height);
+            Vector2 pos = { (VIRTUAL_WIDTH - imgNote2.width * scale) / 2.0f, (VIRTUAL_HEIGHT - imgNote2.height * scale) / 2.0f };
+            DrawTextureEx(imgNote2, pos, 0.0f, scale, WHITE);
             
             const char* hint = "Press 'E' to close";
             int hw = MeasureText(hint, 20);
@@ -1074,12 +1334,15 @@ void UnloadScreenGameplay(void)
     UnloadCharacter(&player);
     for (int i = 0; i < enemyCount; i++) UnloadEnemy(&enemies[i]);
 
-    // Unload shared enemy textures
-    if (enemySpriteR.id != 0) UnloadTexture(enemySpriteR);
-    if (enemySpriteL.id != 0) UnloadTexture(enemySpriteL);
+    // Unload shared enemy textures (all types)
+    for (int t = 0; t < ENEMY_TYPE_COUNT; t++) {
+        if (enemySpriteR[t].id != 0) UnloadTexture(enemySpriteR[t]);
+        if (enemySpriteL[t].id != 0) UnloadTexture(enemySpriteL[t]);
+    }
     
     // Unload puzzle assets
     if (imgCode.id != 0) UnloadTexture(imgCode);
+    if (imgNote2.id != 0) UnloadTexture(imgNote2);
     if (codePuzzle.bgTexture.id != 0) {
         UnloadTexture(codePuzzle.bgTexture);
         codePuzzle.bgTexture = (Texture2D){0};
@@ -1110,6 +1373,9 @@ void GetGameplaySaveData(SaveData* data)
     // Inventory
     data->hasKeycardA    = hasKeycardA;
     data->hasKeycardB    = hasKeycardB;
+
+    // Events
+    data->forceDialogueTriggered = forceDialogueTriggered;
 
     data->enemyCount = enemyCount;
     for (int i = 0; i < enemyCount && i < SAVE_MAX_ENEMIES; i++) {
@@ -1146,6 +1412,9 @@ void RestoreGameplayFromSave(const SaveData* data)
     // Inventory
     hasKeycardA = data->hasKeycardA;
     hasKeycardB = data->hasKeycardB;
+
+    // Events
+    forceDialogueTriggered = data->forceDialogueTriggered;
 
     // Reset death states on load
     isPlayerDead   = false;

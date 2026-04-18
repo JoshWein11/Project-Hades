@@ -1,0 +1,14 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+CMD|BG|puzzle_2.png
+CMD|WAIT|0.5
+---
+ORION|left
+Another one?
+---
+ORION|left
+Green = 4... Blue = 3...
+---
+ORION|left
+I think I know what to do.
+---

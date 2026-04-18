@@ -1,0 +1,8 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+Blue button...
+---
+ORION|left
+I think we're suppose to activate the button
+---

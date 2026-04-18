@@ -15,7 +15,8 @@ typedef enum {
     EVENT_SFX,
     EVENT_WAIT,
     EVENT_TITLE,
-    EVENT_ANIM
+    EVENT_ANIM,
+    EVENT_CAMERA
 } EventType;
 
 typedef struct {
@@ -24,7 +25,9 @@ typedef struct {
     char speaker[64];    // Used for speaker name
     char image[128];     // Used for portrait image
     bool isRight;        // Used for portrait orientation
-    float floatArg;      // Used for WAIT time / ANIM fps
+    float floatArg;      // Used for WAIT time / ANIM fps / CAM dx
+    float floatArg2;     // Used for CAM dy
+    float floatArg3;     // Used for CAM duration
     int   intArg;        // Used for ANIM column count
 } SceneEvent;
 
@@ -37,5 +40,8 @@ void UnloadScreenDialogue(void);
 // Convenience: unloads the current dialogue and loads a new file.
 // Call this before transitioning to the DIALOGUE screen.
 void LoadDialogueFile(const char* dialogueFile);
+
+// Returns the current camera offset applied by active EVENT_CAMERA dialogues
+Vector2 GetDialogueCameraOffset(void);
 
 #endif // SCREEN_DIALOGUE_H

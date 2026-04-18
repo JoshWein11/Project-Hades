@@ -64,6 +64,13 @@ static int animCurrentFrame = 0;
 static float animFps = 5.0f;
 static int animFrameTimer = 0;
 
+// State for CAMERA event
+static Vector2 currentCamOffset = {0};
+static Vector2 targetCamOffset = {0};
+static Vector2 startCamOffset = {0};
+static float camShiftTimer = 0.0f;
+static float camShiftDuration = 0.0f;
+
 // Title card fade state
 typedef enum { TITLE_FADE_IN, TITLE_HOLD, TITLE_FADE_OUT } TitlePhase;
 static TitlePhase titlePhase = TITLE_FADE_IN;
@@ -226,6 +233,11 @@ void InitScreenDialogue(const char* dialogueFile)
     animCurrentFrame = 0;
     animFrameTimer = 0;
     animTotalFrames = 0;
+    currentCamOffset = (Vector2){0, 0};
+    targetCamOffset = (Vector2){0, 0};
+    startCamOffset = (Vector2){0, 0};
+    camShiftTimer = 0.0f;
+    camShiftDuration = 0.0f;
     memset(&animTexture, 0, sizeof(Texture2D));
     memset(&activeBg, 0, sizeof(Texture2D));
     memset(&activeBgm, 0, sizeof(Music));
@@ -338,6 +350,31 @@ void InitScreenDialogue(const char* dialogueFile)
                                     ev->floatArg = animSpeed;
                                     GetCachedTexture(ev->text); // Preload
                                     eventCount++;
+                                } else if (strcmp(cmdType, "CAM") == 0) {
+                                    // CMD|CAM|dx|dy|duration
+                                    char dx[16] = {0}, dy[16] = {0}, dur[16] = {0};
+                                    char* p1 = strchr(cmdArg, '|');
+                                    if (p1) {
+                                        int len1 = (int)(p1 - cmdArg);
+                                        if (len1 >= 16) len1 = 15;
+                                        strncpy(dx, cmdArg, len1);
+                                        char* p2 = strchr(p1 + 1, '|');
+                                        if (p2) {
+                                            int len2 = (int)(p2 - p1 - 1);
+                                            if (len2 >= 16) len2 = 15;
+                                            strncpy(dy, p1 + 1, len2);
+                                            strncpy(dur, p2 + 1, 15);
+                                        } else {
+                                            strncpy(dy, p1 + 1, 15);
+                                        }
+                                    } else {
+                                        strncpy(dx, cmdArg, 15);
+                                    }
+                                    ev->type = EVENT_CAMERA;
+                                    ev->floatArg = (float)atof(dx);
+                                    ev->floatArg2 = (float)atof(dy);
+                                    ev->floatArg3 = (float)atof(dur);
+                                    eventCount++;
                                 } else if (strcmp(cmdType, "CHAR") == 0 && charRegistryCount < MAX_CHARACTERS) {
                                     // CMD|CHAR|NAME|left_img.png|right_img.png
                                     // cmdArg = "NAME|left_img.png|right_img.png"
@@ -434,6 +471,11 @@ void ResetScreenDialogue(void)
     animActive = false;
     animCurrentFrame = 0;
     animFrameTimer = 0;
+    currentCamOffset = (Vector2){0, 0};
+    targetCamOffset = (Vector2){0, 0};
+    startCamOffset = (Vector2){0, 0};
+    camShiftTimer = 0.0f;
+    camShiftDuration = 0.0f;
     
     if (hasActiveBgm) {
         StopMusicStream(activeBgm);
@@ -464,6 +506,15 @@ GameScreen UpdateScreenDialogue(Audio* audio)
             Sound s = GetCachedSound(ev->text);
             if (s.stream.buffer != NULL) PlaySound(s);
             currentEvent++;
+        } else if (ev->type == EVENT_CAMERA) {
+            targetCamOffset = (Vector2){ ev->floatArg, ev->floatArg2 };
+            startCamOffset = currentCamOffset;
+            camShiftDuration = ev->floatArg3;
+            camShiftTimer = 0.0f;
+            if (camShiftDuration <= 0.0f) {
+                currentCamOffset = targetCamOffset;
+            }
+            currentEvent++;
         } else {
             // Found a blocking event (WAIT or DIALOGUE)
             break;
@@ -473,6 +524,16 @@ GameScreen UpdateScreenDialogue(Audio* audio)
     // Always update BGM if it's playing
     if (hasActiveBgm) {
         UpdateMusicStream(activeBgm);
+    }
+    
+    // Smooth camera interpolation
+    if (camShiftDuration > 0.0f && camShiftTimer < camShiftDuration) {
+        camShiftTimer += GetFrameTime();
+        if (camShiftTimer > camShiftDuration) camShiftTimer = camShiftDuration;
+        float t = camShiftTimer / camShiftDuration;
+        float ease = t * t * (3.0f - 2.0f * t); // Smooth step
+        currentCamOffset.x = startCamOffset.x + (targetCamOffset.x - startCamOffset.x) * ease;
+        currentCamOffset.y = startCamOffset.y + (targetCamOffset.y - startCamOffset.y) * ease;
     }
 
     // Sequence end reached
@@ -733,10 +794,21 @@ void UnloadScreenDialogue(void)
     musicCacheCount = 0;
     hasActiveBg = false;
     hasActiveBgm = false;
+    
+    currentCamOffset = (Vector2){0,0};
+    targetCamOffset = (Vector2){0,0};
+    startCamOffset = (Vector2){0,0};
+    camShiftTimer = 0.0f;
+    camShiftDuration = 0.0f;
 }
 
 void LoadDialogueFile(const char* dialogueFile)
 {
     UnloadScreenDialogue();
     InitScreenDialogue(dialogueFile);
+}
+
+Vector2 GetDialogueCameraOffset(void)
+{
+    return currentCamOffset;
 }

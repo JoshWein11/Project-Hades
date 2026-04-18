@@ -350,7 +350,8 @@ void InitEnemy(Enemy*       e,
                Texture2D    spriteL,
                int          frameWidth,
                int          frameHeight,
-               float        scale)
+               float        scale,
+               EnemyBehavior behavior)
 {
     memset(e, 0, sizeof(Enemy));
 
@@ -412,6 +413,25 @@ void InitEnemy(Enemy*       e,
     // ── Placeholder rectangle ─────────────────────────────────────────────────
     e->width  = (float)e->frameWidth  * e->scale;
     e->height = (float)e->frameHeight * e->scale;
+
+    // ── Behavior-specific overrides ───────────────────────────────────────────
+    e->behavior = behavior;
+    if (behavior == BEHAVIOR_MUSHROOM) {
+        e->maxHealth       = 300.0f;   // Triple HP
+        e->health          = e->maxHealth;
+        e->patrolSpeed     = 0.0f;     // Never moves
+        e->chaseSpeed      = 0.0f;
+        e->gasRange        = 200.0f;   // Detection/attack radius
+        e->gasDamagePerSec = 10.0f;    // DPS per projectile on player
+        e->shootCooldown   = 2.0f;     // Fire every 2 seconds
+        e->shootTimer      = 0.0f;     // Ready to fire immediately
+        // Omnidirectional detection
+        e->visionRange     = 200.0f;
+        e->visionAngle     = 180.0f;
+        // Clear projectiles
+        for (int i = 0; i < ENEMY_MAX_PROJECTILES; i++)
+            e->projectiles[i].active = false;
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -485,6 +505,83 @@ void UpdateEnemy(Enemy* e, Vector2 playerPos, float dt, bool* outShake,
     // ── Dead — only play death animation, no movement ─────────────────────────
     if (e->state == ENEMY_DEAD) {
         TickClip(e, &e->clipDeath, &e->animDeath, 0, dt);
+        return;
+    }
+
+    // ── Mushroom behavior: stationary + poison projectiles ───────────────────
+    if (e->behavior == BEHAVIOR_MUSHROOM) {
+        // HIT state countdown (can still be stunned/damaged)
+        if (e->state == ENEMY_HIT) {
+            e->hitStateTimer -= dt;
+            TickClip(e, &e->clipHit, &e->animHit, 0, dt);
+            if (e->hitStateTimer <= 0.0f) {
+                e->state = ENEMY_PATROL;
+            }
+        } else {
+            // Play idle animation
+            TickClip(e, &e->clipIdle, &e->animIdle, 0, dt);
+        }
+
+        // Update existing projectiles (always, even when hit-stunned)
+        for (int i = 0; i < ENEMY_MAX_PROJECTILES; i++) {
+            EnemyProjectile* p = &e->projectiles[i];
+            if (!p->active) continue;
+            
+            if (!p->isSplattered) {
+                Vector2 toTarget = Vector2Subtract(p->targetPosition, p->position);
+                float distToTarget = Vector2Length(toTarget);
+                float speed = Vector2Length(p->velocity);
+                float frameStep = speed * dt;
+
+                if (distToTarget <= frameStep || distToTarget < 2.0f) {
+                    // Reached destination! Splatter on the floor.
+                    p->isSplattered = true;
+                    p->position     = p->targetPosition;
+                    p->velocity     = (Vector2){0, 0};
+                    p->radius       = 45.0f;
+                    p->lifeTimer    = 3.5f; // Puddle lingering duration
+                } else {
+                    // Keep flying
+                    p->position = Vector2Add(p->position, Vector2Scale(p->velocity, dt));
+                    p->lifeTimer -= dt;
+                    if (p->lifeTimer <= 0.0f) p->active = false; // Flight timeout
+                }
+            } else {
+                // Splattered pool lingering
+                p->lifeTimer -= dt;
+                if (p->lifeTimer <= 0.0f) p->active = false;
+            }
+        }
+
+        // Shoot logic (skip while hit-stunned)
+        if (e->state != ENEMY_HIT) {
+            e->shootTimer -= dt;
+            Vector2 centre = EnemyCentre(e);
+            float dist = Vector2Distance(centre, playerPos);
+            bool canShoot = (dist <= e->gasRange &&
+                            HasLOS(centre, playerPos, colliders, colliderCount));
+
+            if (canShoot && e->shootTimer <= 0.0f) {
+                // Fire a poison projectile toward the player
+                for (int i = 0; i < ENEMY_MAX_PROJECTILES; i++) {
+                    if (!e->projectiles[i].active) {
+                        EnemyProjectile* p = &e->projectiles[i];
+                        p->active       = true;
+                        p->isSplattered = false;
+                        p->targetPosition = playerPos; // Set destination to current player position
+                        p->position     = centre;
+                        p->radius       = 10.0f;
+                        p->lifeTimer    = 10.0f;  // Fallback flight despawn after 10 seconds
+                        p->damagePerSec = e->gasDamagePerSec;
+                        // Slow-moving poison gas ball
+                        Vector2 dir = Vector2Normalize(Vector2Subtract(playerPos, centre));
+                        p->velocity = Vector2Scale(dir, 80.0f); // 80 px/s
+                        break;
+                    }
+                }
+                e->shootTimer = e->shootCooldown;
+            }
+        }
         return;
     }
 
@@ -695,36 +792,65 @@ void DrawEnemy(Enemy* e) {
         DrawRectangleV(e->position, (Vector2){ e->width, e->height }, base);
     }
 
-    // ── Vision cone (helpful during development, comment out for release) ──────
+    // ── Vision cone / detection range ──────────────────────────────────────────
     if (e->state != ENEMY_DEAD) {
         Vector2 centre = EnemyCentre(e);
-        float startAngle = (e->facingAngleDeg - e->visionAngle) * DEG2RAD;
-        float endAngle   = (e->facingAngleDeg + e->visionAngle) * DEG2RAD;
-        Color coneColor  = (e->state == ENEMY_CHASE)  ? Fade(ORANGE, 0.20f)
-                         : (e->state == ENEMY_SEARCH) ? Fade(YELLOW, 0.25f)
-                                                      : Fade(YELLOW, 0.12f);
-        Color edgeColor  = Fade(YELLOW, 0.4f);
 
-        // Draw filled arc as a triangle fan (20 slices for a smooth curve)
-        int segments = 20;
-        float step = (endAngle - startAngle) / (float)segments;
-        for (int i = 0; i < segments; i++) {
-            float a1 = startAngle + step * (float)i;
-            float a2 = startAngle + step * (float)(i + 1);
-            Vector2 p1 = { centre.x + cosf(a1) * e->visionRange,
-                           centre.y + sinf(a1) * e->visionRange };
-            Vector2 p2 = { centre.x + cosf(a2) * e->visionRange,
-                           centre.y + sinf(a2) * e->visionRange };
-            DrawTriangle(centre, p2, p1, coneColor);
+        if (e->behavior == BEHAVIOR_MUSHROOM) {
+            // ── Mushroom: draw active projectiles only (no range indicator) ──
+            // Draw poison gas projectiles
+            for (int i = 0; i < ENEMY_MAX_PROJECTILES; i++) {
+                EnemyProjectile* p = &e->projectiles[i];
+                if (!p->active) continue;
+                
+                if (!p->isSplattered) {
+                    // Flying ball - Glowing orb
+                    DrawCircleV(p->position, p->radius * 1.5f, Fade((Color){128, 0, 128, 255}, 0.15f));
+                    DrawCircleV(p->position, p->radius, Fade((Color){180, 40, 220, 255}, 0.6f));
+                    DrawCircleV(p->position, p->radius * 0.4f, Fade((Color){220, 100, 255, 255}, 0.8f));
+                } else {
+                    // Splattered pool - Large translucent damage area
+                    float alpha = p->lifeTimer / 3.5f; // Fades out towards the end
+                    if (alpha > 1.0f) alpha = 1.0f;
+                    
+                    // Outer edge
+                    DrawCircleV(p->position, p->radius, Fade((Color){100, 20, 160, 255}, 0.4f * alpha));
+                    // Middle zone
+                    DrawCircleV(p->position, p->radius * 0.7f, Fade((Color){140, 40, 200, 255}, 0.5f * alpha));
+                    // Inner toxic bubbling core
+                    DrawCircleV(p->position, p->radius * 0.4f, Fade((Color){180, 60, 240, 255}, 0.6f * alpha));
+                }
+            }
+        } else {
+            // ── Normal enemies: directional vision cone ────────────────────────
+            float startAngle = (e->facingAngleDeg - e->visionAngle) * DEG2RAD;
+            float endAngle   = (e->facingAngleDeg + e->visionAngle) * DEG2RAD;
+            Color coneColor  = (e->state == ENEMY_CHASE)  ? Fade(ORANGE, 0.20f)
+                             : (e->state == ENEMY_SEARCH) ? Fade(YELLOW, 0.25f)
+                                                          : Fade(YELLOW, 0.12f);
+            Color edgeColor  = Fade(YELLOW, 0.4f);
+
+            // Draw filled arc as a triangle fan (20 slices for a smooth curve)
+            int segments = 20;
+            float step = (endAngle - startAngle) / (float)segments;
+            for (int i = 0; i < segments; i++) {
+                float a1 = startAngle + step * (float)i;
+                float a2 = startAngle + step * (float)(i + 1);
+                Vector2 p1 = { centre.x + cosf(a1) * e->visionRange,
+                               centre.y + sinf(a1) * e->visionRange };
+                Vector2 p2 = { centre.x + cosf(a2) * e->visionRange,
+                               centre.y + sinf(a2) * e->visionRange };
+                DrawTriangle(centre, p2, p1, coneColor);
+            }
+
+            // Edge lines along the two sides of the cone
+            Vector2 v1 = { centre.x + cosf(startAngle) * e->visionRange,
+                           centre.y + sinf(startAngle) * e->visionRange };
+            Vector2 v2 = { centre.x + cosf(endAngle)   * e->visionRange,
+                           centre.y + sinf(endAngle)   * e->visionRange };
+            DrawLineV(centre, v1, edgeColor);
+            DrawLineV(centre, v2, edgeColor);
         }
-
-        // Edge lines along the two sides of the cone
-        Vector2 v1 = { centre.x + cosf(startAngle) * e->visionRange,
-                       centre.y + sinf(startAngle) * e->visionRange };
-        Vector2 v2 = { centre.x + cosf(endAngle)   * e->visionRange,
-                       centre.y + sinf(endAngle)   * e->visionRange };
-        DrawLineV(centre, v1, edgeColor);
-        DrawLineV(centre, v2, edgeColor);
     }
 
     // ── Health bar (hidden when full or dead) ─────────────────────────────────

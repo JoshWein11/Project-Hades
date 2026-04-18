@@ -2672,7 +2672,7 @@
                 {
                  "height":0,
                  "id":275,
-                 "name":"1",
+                 "name":"s_1",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2684,7 +2684,7 @@
                 {
                  "height":0,
                  "id":276,
-                 "name":"1",
+                 "name":"s_1",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2696,7 +2696,7 @@
                 {
                  "height":0,
                  "id":277,
-                 "name":"2",
+                 "name":"s_2",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2708,7 +2708,7 @@
                 {
                  "height":0,
                  "id":278,
-                 "name":"2",
+                 "name":"s_2",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2720,7 +2720,7 @@
                 {
                  "height":0,
                  "id":279,
-                 "name":"",
+                 "name":"s",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2732,7 +2732,7 @@
                 {
                  "height":0,
                  "id":281,
-                 "name":"",
+                 "name":"s",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2744,7 +2744,7 @@
                 {
                  "height":0,
                  "id":282,
-                 "name":"",
+                 "name":"r",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2756,7 +2756,7 @@
                 {
                  "height":0,
                  "id":283,
-                 "name":"",
+                 "name":"r",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2768,7 +2768,7 @@
                 {
                  "height":0,
                  "id":284,
-                 "name":"3",
+                 "name":"s_3",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2780,7 +2780,7 @@
                 {
                  "height":0,
                  "id":285,
-                 "name":"",
+                 "name":"r",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2792,7 +2792,7 @@
                 {
                  "height":0,
                  "id":286,
-                 "name":"",
+                 "name":"r",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2804,7 +2804,7 @@
                 {
                  "height":0,
                  "id":287,
-                 "name":"",
+                 "name":"s",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2816,7 +2816,7 @@
                 {
                  "height":0,
                  "id":288,
-                 "name":"",
+                 "name":"r",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2828,7 +2828,7 @@
                 {
                  "height":0,
                  "id":289,
-                 "name":"",
+                 "name":"s",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2840,7 +2840,7 @@
                 {
                  "height":0,
                  "id":290,
-                 "name":"",
+                 "name":"s",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2852,7 +2852,7 @@
                 {
                  "height":0,
                  "id":291,
-                 "name":"3",
+                 "name":"s_3",
                  "point":true,
                  "rotation":0,
                  "type":"",
@@ -2863,7 +2863,7 @@
                 }],
          "opacity":1,
          "type":"objectgroup",
-         "visible":false,
+         "visible":true,
          "x":0,
          "y":0
         }, 
@@ -2885,7 +2885,7 @@
                 }],
          "opacity":1,
          "type":"objectgroup",
-         "visible":true,
+         "visible":false,
          "x":0,
          "y":0
         }, 
@@ -2908,7 +2908,7 @@
                 }],
          "opacity":1,
          "type":"objectgroup",
-         "visible":true,
+         "visible":false,
          "x":0,
          "y":0
         }],

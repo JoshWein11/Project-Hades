@@ -38,3 +38,31 @@ Environmental Controls: Offline. Full system recovery required for complete acce
 ADRIAN|left
 Good enough. Get me to the Central Control Chamber.
 ---
+CMD|BG|stage2_cutscene3.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+This pistol's useless. It barely even fazes them. I won't be able to make it on this.
+---
+ADRIAN|left
+There has to be something... some way to even the odds.
+---
+CMD|BG|stage2_cutscene4.qoi
+CMD|WAIT|1.0
+---
+ORION|left
+Dr. Voss, analysis of recovered data indicates Dr. Elias developed a chemical compound —VX-9— that destabilizes 
+Hades' cellular structure.
+---
+ADRIAN|right
+VX-9... that's it. That could give me a fighting chance. ORION, locate VX-9
+---
+ORION|left
+Locating VX-9 Modified Pistol... Functionality is optimized for Hades cellular disruption.
+---
+ADRIAN|right
+Finally... Elias didn’t leave me completely empty-handed.
+---
+CMD|TITLE|Objective : Reach Elias' office.
+---
+

@@ -9,11 +9,28 @@
 #define MAX_ENEMY_SPAWNS     32
 #define MAX_PUZZLE_OBJECTS   16
 
+// Enemy visual type — same stats/AI, different sprite.
+typedef enum {
+    ENEMY_TYPE_SLIME,
+    ENEMY_TYPE_WORKER,
+    ENEMY_TYPE_RAT,
+    ENEMY_TYPE_MUSHROOM,
+    ENEMY_TYPE_COUNT
+} EnemyType;
+
+// Enemy behavior — controls which AI branch runs in UpdateEnemy.
+typedef enum {
+    BEHAVIOR_PATROL,    // Default: patrol/chase/search FSM (slime, worker, rat)
+    BEHAVIOR_MUSHROOM   // Stationary: never moves, emits poison gas AOE
+} EnemyBehavior;
+
 // A single point from the Tiled "Enemy" object layer.
 // 'group' holds the object's name — empty string means stationary.
+// 'type' is derived from the first character of the name (s/r/w/m).
 typedef struct {
-    Vector2 position;    // World position of this point
-    char    group[16];   // Name from Tiled — empty = stationary, same name = shared patrol
+    Vector2   position;    // World position of this point
+    char      group[16];   // Name from Tiled — empty = stationary, same name = shared patrol
+    EnemyType type;        // Derived from first char of name: s=slime, r=rat, w=worker, m=mushroom
 } EnemySpawnPoint;
 
 // A single interactable object from the Tiled "Puzzle" object layer.
@@ -33,6 +50,7 @@ typedef struct {
     Texture2D stage2tileset;
     Texture2D orion_off;
     Texture2D orion;
+    Texture2D stage3tileset;
     
     Rectangle collisionRecs[MAX_COLLISION_RECS];
     int collisionCount;
@@ -48,6 +66,9 @@ typedef struct {
 
     PuzzleObject characterObjects[MAX_PUZZLE_OBJECTS]; // NPC / In-Game dialogue triggers
     int          characterObjectCount;
+
+    PuzzleObject forceDialogueObjects[MAX_PUZZLE_OBJECTS]; // Force Event Dialogues
+    int          forceDialogueObjectCount;
 
     Rectangle nextActTrigger;
     bool      hasNextActTrigger;

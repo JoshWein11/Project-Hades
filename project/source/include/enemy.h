@@ -2,6 +2,7 @@
 #define ENEMY_H
 
 #include "raylib.h"
+#include "tiled_map.h"
 #include <stdbool.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 #define ENEMY_MAX_WAYPOINTS   8    // Maximum patrol stops per enemy
 #define ENEMY_MAX_PARTICLES   24   // Hit-burst particles per enemy
+#define ENEMY_MAX_PROJECTILES 8    // Mushroom poison gas projectiles
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EnemyState — the four states in the finite state machine
@@ -51,6 +53,20 @@ typedef struct {
     float   size;
     Color   color;
 } EnemyParticle;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EnemyProjectile — a poison gas ball shot by mushroom enemies
+// ─────────────────────────────────────────────────────────────────────────────
+typedef struct {
+    Vector2 position;
+    Vector2 targetPosition; // Floor destination for the projectile
+    Vector2 velocity;
+    float   radius;         // Collision/visual radius
+    float   lifeTimer;      // Seconds remaining before despawn
+    float   damagePerSec;   // DPS applied while overlapping player
+    bool    active;
+    bool    isSplattered;   // True if the ball reached the floor and splattered
+} EnemyProjectile;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy — complete state for one patrolling, reactive enemy.
@@ -142,6 +158,14 @@ typedef struct {
     // ── Particles ─────────────────────────────────────────────────────────────
     EnemyParticle particles[ENEMY_MAX_PARTICLES];
 
+    // ── Mushroom-specific (stationary + poison projectiles) ───────────────────
+    EnemyBehavior     behavior;          // BEHAVIOR_PATROL or BEHAVIOR_MUSHROOM
+    float             gasRange;          // Detection radius (200 px)
+    float             gasDamagePerSec;   // DPS per projectile overlapping player
+    float             shootCooldown;     // Seconds between shots
+    float             shootTimer;        // Current cooldown countdown
+    EnemyProjectile   projectiles[ENEMY_MAX_PROJECTILES];
+
     // ── Placeholder visuals (no sprite) ───────────────────────────────────────
     float      width;            // Rectangle width  to draw
     float      height;           // Rectangle height to draw
@@ -168,7 +192,8 @@ void InitEnemy(Enemy*      e,
                Texture2D   spriteL,
                int         frameWidth,
                int         frameHeight,
-               float       scale);
+               float       scale,
+               EnemyBehavior behavior);
 
 // Updates FSM, movement, vision cone, animations, particles, and timers.
 //   playerPos      : Centre of the player character in world space.

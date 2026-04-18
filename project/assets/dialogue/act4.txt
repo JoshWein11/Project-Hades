@@ -1,0 +1,43 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+CMD|CHAR|ELIAS|elias_l.png|elias_r.png
+---
+CMD|BG|stage3_cutscene1.qoi
+CMD|BGM|bgm3.wav
+CMD|WAIT|1.0
+---
+ADRIAN|right
+Now this... this can actually hurt them.
+---
+ADRIAN|right
+Great. Time to put this to work.
+---
+CMD|BG|stage3_cutscene2.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|right
+???
+---
+CMD|BG|stage3_cutscene3.qoi
+CMD|WAIT|1.0
+---
+ELIAS|right
+...Hello? Anyone... please... can anyone hear me?
+---
+ADRIAN|left
+I hear you. Stay with me. Where are you?
+---
+ELIAS|right
+Sector... 7... I'm trapped... I don't have much time...
+---
+ADRIAN|left
+Hold on. I'm coming to you.
+---
+ELIAS|right
+You shouldn't be here... it's not safe...
+---
+ADRIAN|left
+None of this is safe. Just stay alive.
+--- 
+
+

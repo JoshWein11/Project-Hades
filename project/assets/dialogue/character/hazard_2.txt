@@ -1,0 +1,11 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+Another one of these...
+---
+ORION|left
+8-digit password...
+---
+ORION|left
+Do you write down the last note... This might be important
+---

@@ -14,10 +14,13 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->stage2tileset = LoadTexture("../assets/images/tileset/stage 2 tileset.png");
     mapData->orion_off = LoadTexture("../assets/images/tileset/orion off.png");
     mapData->orion = LoadTexture("../assets/images/tileset/orion.png");
+    mapData->stage3tileset = LoadTexture("../assets/images/tileset/stage 3 tileset.png");
     mapData->collisionCount = 0;
     mapData->navNodeCount   = 0;
     mapData->enemySpawnCount = 0;
     mapData->puzzleObjectCount = 0;
+    mapData->characterObjectCount = 0;
+    mapData->forceDialogueObjectCount = 0;
     mapData->hasNextActTrigger = false;
     mapData->hasSpawnPoint = false;
 
@@ -45,8 +48,16 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
                         if (obj->name.ptr && strlen(obj->name.ptr) > 0) {
                             strncpy(sp->group, obj->name.ptr, 15);
                             sp->group[15] = '\0';
+                            // Derive enemy type from first character of name
+                            switch (sp->group[0]) {
+                                case 'r': case 'R': sp->type = ENEMY_TYPE_RAT;      break;
+                                case 'w': case 'W': sp->type = ENEMY_TYPE_WORKER;   break;
+                                case 'm': case 'M': sp->type = ENEMY_TYPE_MUSHROOM; break;
+                                default:            sp->type = ENEMY_TYPE_SLIME;     break;
+                            }
                         } else {
                             sp->group[0] = '\0';
+                            sp->type = ENEMY_TYPE_SLIME; // Unnamed defaults to slime
                         }
                         mapData->enemySpawnCount++;
                         obj = obj->next;
@@ -101,6 +112,22 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
                             po->name[0] = '\0';
                         }
                         mapData->characterObjectCount++;
+                        obj = obj->next;
+                    }
+                }
+                // ── Force Dialogue layer → Load as force dialogue triggers ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "force dialogue") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    while (obj && mapData->forceDialogueObjectCount < MAX_PUZZLE_OBJECTS) {
+                        PuzzleObject* po = &mapData->forceDialogueObjects[mapData->forceDialogueObjectCount];
+                        po->bounds = (Rectangle){ obj->x, obj->y, obj->width, obj->height };
+                        if (obj->name.ptr && strlen(obj->name.ptr) > 0) {
+                            strncpy(po->name, obj->name.ptr, 31);
+                            po->name[31] = '\0';
+                        } else {
+                            po->name[0] = '\0';
+                        }
+                        mapData->forceDialogueObjectCount++;
                         obj = obj->next;
                     }
                 } else {
@@ -183,6 +210,8 @@ void DrawTiledMap(MapData* mapData) {
                             tex = mapData->orion_off;
                         } else if (strstr(ts_ident, "orion")) {
                             tex = mapData->orion;
+                        } else if (strstr(ts_ident, "stage 3 tileset")) {
+                            tex = mapData->stage3tileset;
                         }
                     }
                     
@@ -247,4 +276,5 @@ void UnloadTiledMap(MapData* mapData) { //Unload Tiled Map
     UnloadTexture(mapData->stage2tileset);
     UnloadTexture(mapData->orion_off);
     UnloadTexture(mapData->orion);
+    UnloadTexture(mapData->stage3tileset);
 }

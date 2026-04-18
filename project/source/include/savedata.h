@@ -33,6 +33,9 @@ typedef struct {
     // Inventory
     bool  hasKeycardA;
     bool  hasKeycardB;
+
+    // Events
+    bool  forceDialogueTriggered;
 } SaveData;
 
 // Writes the SaveData struct to a binary file. Returns true on success.

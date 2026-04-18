@@ -1,0 +1,11 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+Now that we have the gun, we need to kill them all.
+---
+ORION|left
+We need to hurry, elias's in danger.
+---
+ORION|left
+PRO TIPS: Shoot from far away to avoid getting hurt.
+---

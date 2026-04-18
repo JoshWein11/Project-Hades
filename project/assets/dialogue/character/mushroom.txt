@@ -1,0 +1,20 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+CMD|WAIT|1.0
+CMD|CAM|0|250|2.5
+CMD|WAIT|3.5
+---
+ADRIAN|left
+So this is what infected the lab workers have become...
+---
+ORION|right
+Be careful, if it really can infect humans, you shouldn't get too close.
+---
+ADRIAN|left
+I'm not sure if it's contagious, but I'll be careful.
+---
+CMD|WAIT|1.0
+CMD|CAM|0|0|2.5
+CMD|WAIT|3.5
+---
