@@ -6,7 +6,7 @@ AR = ar
 CFLAGS = -Wall -Iinclude
 
 # Linker flags (link our new setting lib, then raylib, then windows libs)
-LDFLAGS = -Llib -laudio -lchar -lsetting -lweapon -ltiled -lenemy -lsavedata -lpuzzle -lraylib -lopengl32 -lgdi32 -lwinmm
+LDFLAGS = -Llib -laudio -lchar -lsetting -lweapon -ltiled -lenemy -lsavedata -lpuzzle -lboss -lraylib -lopengl32 -lgdi32 -lwinmm
 
 # Target executable
 TARGET = game.exe
@@ -32,13 +32,15 @@ SAVEDATA_OBJ = module/savedata.o
 SAVEDATA_LIB = lib/libsavedata.a
 PUZZLE_OBJ = module/puzzle.o
 PUZZLE_LIB = lib/libpuzzle.a
+BOSS_OBJ = module/boss.o
+BOSS_LIB = lib/libboss.a
 
 
 # Default rule
 all: $(TARGET)
 
 # Link the final executable using the main object and our newly built library
-$(TARGET): $(MAIN_OBJ) $(SCREENS_OBJ) $(SETTING_LIB) $(CHAR_LIB) $(TILED_LIB) $(WEAPON_LIB) $(AUDIO_LIB) $(ENEMY_LIB) $(SAVEDATA_LIB) $(PUZZLE_LIB)
+$(TARGET): $(MAIN_OBJ) $(SCREENS_OBJ) $(SETTING_LIB) $(CHAR_LIB) $(TILED_LIB) $(WEAPON_LIB) $(AUDIO_LIB) $(ENEMY_LIB) $(SAVEDATA_LIB) $(PUZZLE_LIB) $(BOSS_LIB)
 	$(CC) $(MAIN_OBJ) $(SCREENS_OBJ) -o $(TARGET) $(CFLAGS) $(LDFLAGS) 
 
 # Create the static library for the setting module
@@ -64,6 +66,9 @@ $(SAVEDATA_LIB): $(SAVEDATA_OBJ)
 	$(AR) rcs $@ $^
 
 $(PUZZLE_LIB): $(PUZZLE_OBJ)
+	$(AR) rcs $@ $^
+
+$(BOSS_LIB): $(BOSS_OBJ)
 	$(AR) rcs $@ $^
 
 # Generic rule to compile any .c file into a .o object file

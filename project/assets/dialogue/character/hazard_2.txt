@@ -9,3 +9,6 @@ ORION|left
 ORION|left
 Do you write down the last note... This might be important
 ---
+ORION|left
+Quick grab a pen and paper (or notepad)
+---

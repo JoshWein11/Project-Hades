@@ -1,0 +1,7 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+ORION|left
+Are you ready to end this?
+---
+CMD|CHOICE|Yes|Wait
+---

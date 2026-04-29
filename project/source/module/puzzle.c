@@ -688,3 +688,266 @@ void DrawCodePuzzle(CodePuzzle* puzzle) {
     int hw = MeasureText(hint, 20);
     DrawText(hint, (VIRTUAL_WIDTH - hw)/2, VIRTUAL_HEIGHT - 40, 20, GRAY);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HazardPuzzle — 8-digit password keypad (code: 5961-6769)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#define HAZARD_PANEL_W 320
+#define HAZARD_PANEL_H 420
+#define HAZARD_BTN_W   70
+#define HAZARD_BTN_H   50
+#define HAZARD_BTN_GAP 10
+
+void InitHazardPuzzle(HazardPuzzle* puzzle) {
+    puzzle->active = false;
+    puzzle->solved = false;
+    puzzle->state = HAZARD_INPUT;
+    strcpy(puzzle->code, "59616769");
+    memset(puzzle->input, 0, sizeof(puzzle->input));
+    puzzle->inputLength = 0;
+    puzzle->failTimer = 0.0f;
+
+    // Layout buttons in phone-style grid: [1][2][3] / [4][5][6] / [7][8][9] / [DEL][0][ENTER]
+    // Button index 0-9 maps to digit 0-9; we'll position them accordingly
+    float panelX = (VIRTUAL_WIDTH  - HAZARD_PANEL_W) / 2.0f;
+    float panelY = (VIRTUAL_HEIGHT - HAZARD_PANEL_H) / 2.0f;
+    float gridStartX = panelX + (HAZARD_PANEL_W - 3 * HAZARD_BTN_W - 2 * HAZARD_BTN_GAP) / 2.0f;
+    float gridStartY = panelY + 110.0f; // Leave room for display at top
+
+    // Buttons 1-9 (index 1-9 in our array)
+    for (int i = 1; i <= 9; i++) {
+        int row = (i - 1) / 3;
+        int col = (i - 1) % 3;
+        puzzle->buttons[i].number = i;
+        puzzle->buttons[i].pressTimer = 0.0f;
+        puzzle->buttons[i].bounds = (Rectangle){
+            gridStartX + col * (HAZARD_BTN_W + HAZARD_BTN_GAP),
+            gridStartY + row * (HAZARD_BTN_H + HAZARD_BTN_GAP),
+            HAZARD_BTN_W, HAZARD_BTN_H
+        };
+    }
+
+    // Button 0 — centered in the 4th row middle column
+    puzzle->buttons[0].number = 0;
+    puzzle->buttons[0].pressTimer = 0.0f;
+    puzzle->buttons[0].bounds = (Rectangle){
+        gridStartX + 1 * (HAZARD_BTN_W + HAZARD_BTN_GAP),
+        gridStartY + 3 * (HAZARD_BTN_H + HAZARD_BTN_GAP),
+        HAZARD_BTN_W, HAZARD_BTN_H
+    };
+}
+
+void OpenHazardPuzzle(HazardPuzzle* puzzle) {
+    if (puzzle->solved) return;
+    puzzle->active = true;
+    puzzle->state = HAZARD_INPUT;
+    memset(puzzle->input, 0, sizeof(puzzle->input));
+    puzzle->inputLength = 0;
+    puzzle->failTimer = 0.0f;
+}
+
+void CloseHazardPuzzle(HazardPuzzle* puzzle) {
+    puzzle->active = false;
+}
+
+bool UpdateHazardPuzzle(HazardPuzzle* puzzle, Vector2 mousePos, Sound btnSfx, Sound failSfx) {
+    if (!puzzle->active || puzzle->solved) return false;
+
+    float dt = GetFrameTime();
+
+    // Decrement visual press timers
+    for (int i = 0; i < 10; i++) {
+        if (puzzle->buttons[i].pressTimer > 0.0f) {
+            puzzle->buttons[i].pressTimer -= dt;
+        }
+    }
+
+    if (puzzle->state == HAZARD_FAIL) {
+        puzzle->failTimer -= dt;
+        if (puzzle->failTimer <= 0.0f) {
+            puzzle->state = HAZARD_INPUT;
+            memset(puzzle->input, 0, sizeof(puzzle->input));
+            puzzle->inputLength = 0;
+        }
+        return false;
+    }
+
+    if (puzzle->state == HAZARD_INPUT) {
+        // DEL and ENTER button areas (computed in draw, replicated here)
+        float panelX = (VIRTUAL_WIDTH  - HAZARD_PANEL_W) / 2.0f;
+        float panelY = (VIRTUAL_HEIGHT - HAZARD_PANEL_H) / 2.0f;
+        float gridStartX = panelX + (HAZARD_PANEL_W - 3 * HAZARD_BTN_W - 2 * HAZARD_BTN_GAP) / 2.0f;
+        float gridStartY = panelY + 110.0f;
+        float row4Y = gridStartY + 3 * (HAZARD_BTN_H + HAZARD_BTN_GAP);
+
+        Rectangle delBtn = { gridStartX, row4Y, HAZARD_BTN_W, HAZARD_BTN_H };
+        Rectangle enterBtn = { gridStartX + 2 * (HAZARD_BTN_W + HAZARD_BTN_GAP), row4Y, HAZARD_BTN_W, HAZARD_BTN_H };
+
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            // Check digit buttons 0-9
+            for (int i = 0; i < 10; i++) {
+                if (CheckCollisionPointRec(mousePos, puzzle->buttons[i].bounds)) {
+                    puzzle->buttons[i].pressTimer = 0.2f;
+                    if (puzzle->inputLength < 8) {
+                        puzzle->input[puzzle->inputLength] = '0' + puzzle->buttons[i].number;
+                        puzzle->inputLength++;
+                        puzzle->input[puzzle->inputLength] = '\0';
+                        PlaySound(btnSfx);
+                    }
+                    break;
+                }
+            }
+
+            // Check DEL button
+            if (CheckCollisionPointRec(mousePos, delBtn)) {
+                if (puzzle->inputLength > 0) {
+                    puzzle->inputLength--;
+                    puzzle->input[puzzle->inputLength] = '\0';
+                    PlaySound(btnSfx);
+                }
+            }
+
+            // Check ENTER button
+            if (CheckCollisionPointRec(mousePos, enterBtn)) {
+                if (puzzle->inputLength == 8) {
+                    if (strcmp(puzzle->input, puzzle->code) == 0) {
+                        // Correct!
+                        puzzle->state = HAZARD_SUCCESS;
+                        puzzle->solved = true;
+                        puzzle->active = false;
+                        PlaySound(btnSfx);
+                        return true;
+                    } else {
+                        // Wrong code
+                        puzzle->state = HAZARD_FAIL;
+                        puzzle->failTimer = 1.5f;
+                        PlaySound(failSfx);
+                    }
+                }
+            }
+        }
+
+        // Auto-submit on 8 digits
+        if (puzzle->inputLength == 8 && puzzle->state == HAZARD_INPUT) {
+            // Wait for ENTER or keep typing (they can delete and retype)
+        }
+    }
+
+    return false;
+}
+
+void DrawHazardPuzzle(HazardPuzzle* puzzle) {
+    if (!puzzle->active) return;
+
+    float panelX = (VIRTUAL_WIDTH  - HAZARD_PANEL_W) / 2.0f;
+    float panelY = (VIRTUAL_HEIGHT - HAZARD_PANEL_H) / 2.0f;
+    float gridStartX = panelX + (HAZARD_PANEL_W - 3 * HAZARD_BTN_W - 2 * HAZARD_BTN_GAP) / 2.0f;
+    float gridStartY = panelY + 110.0f;
+
+    // ── Dim background ───────────────────────────────────────────────────────
+    DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.85f));
+
+    // ── Panel background ─────────────────────────────────────────────────────
+    Rectangle panelRec = { panelX, panelY, HAZARD_PANEL_W, HAZARD_PANEL_H };
+    DrawRectangleRounded(panelRec, 0.05f, 10, (Color){ 25, 25, 35, 245 });
+    DrawRectangleRoundedLines(panelRec, 0.05f, 10, (Color){ 80, 80, 100, 255 });
+
+    // ── Title ────────────────────────────────────────────────────────────────
+    const char* title = "ENTER PASSWORD";
+    int titleW = MeasureText(title, 22);
+    DrawText(title, (int)(panelX + HAZARD_PANEL_W / 2 - titleW / 2), (int)(panelY + 15), 22, RAYWHITE);
+
+    // ── Code display (****-****) ─────────────────────────────────────────────
+    char display[12] = "________";
+    for (int i = 0; i < puzzle->inputLength && i < 8; i++) {
+        display[i] = puzzle->input[i];
+    }
+    // Format as ****-****
+    char formatted[16];
+    snprintf(formatted, sizeof(formatted), "%.4s-%.4s", display, display + 4);
+
+    Color displayColor = RAYWHITE;
+    if (puzzle->state == HAZARD_FAIL) displayColor = RED;
+
+    int fmtW = MeasureText(formatted, 32);
+    float displayY = panelY + 50.0f;
+    Rectangle displayBox = { panelX + 20, displayY, HAZARD_PANEL_W - 40, 45 };
+    DrawRectangleRec(displayBox, (Color){ 10, 10, 15, 255 });
+    DrawRectangleLinesEx(displayBox, 2.0f, (Color){ 60, 60, 80, 255 });
+    DrawText(formatted, (int)(panelX + HAZARD_PANEL_W / 2 - fmtW / 2), (int)(displayY + 8), 32, displayColor);
+
+    // ── Draw digit buttons 1-9 ───────────────────────────────────────────────
+    for (int i = 1; i <= 9; i++) {
+        Rectangle r = puzzle->buttons[i].bounds;
+        Color btnCol = (Color){ 50, 50, 65, 255 };
+
+        if (puzzle->buttons[i].pressTimer > 0.0f) {
+            btnCol = (Color){ 30, 30, 40, 255 };
+        } else if (CheckCollisionPointRec(GetVirtualMouse(), r)) {
+            btnCol = (Color){ 70, 70, 90, 255 };
+        }
+
+        DrawRectangleRounded(r, 0.2f, 8, btnCol);
+        DrawRectangleRoundedLines(r, 0.2f, 8, (Color){ 90, 90, 110, 255 });
+
+        const char* numStr = TextFormat("%d", i);
+        int tw = MeasureText(numStr, 24);
+        DrawText(numStr, (int)(r.x + r.width / 2 - tw / 2), (int)(r.y + 13), 24, RAYWHITE);
+    }
+
+    // ── Draw 4th row: [DEL] [0] [ENTER] ──────────────────────────────────────
+    float row4Y = gridStartY + 3 * (HAZARD_BTN_H + HAZARD_BTN_GAP);
+
+    // DEL button
+    {
+        Rectangle r = { gridStartX, row4Y, HAZARD_BTN_W, HAZARD_BTN_H };
+        Color btnCol = (Color){ 100, 40, 40, 255 };
+        if (CheckCollisionPointRec(GetVirtualMouse(), r)) btnCol = (Color){ 140, 50, 50, 255 };
+        DrawRectangleRounded(r, 0.2f, 8, btnCol);
+        DrawRectangleRoundedLines(r, 0.2f, 8, (Color){ 160, 60, 60, 255 });
+        const char* delStr = "DEL";
+        int dw = MeasureText(delStr, 18);
+        DrawText(delStr, (int)(r.x + r.width / 2 - dw / 2), (int)(r.y + 16), 18, RAYWHITE);
+    }
+
+    // 0 button (center)
+    {
+        Rectangle r = puzzle->buttons[0].bounds;
+        Color btnCol = (Color){ 50, 50, 65, 255 };
+        if (puzzle->buttons[0].pressTimer > 0.0f) {
+            btnCol = (Color){ 30, 30, 40, 255 };
+        } else if (CheckCollisionPointRec(GetVirtualMouse(), r)) {
+            btnCol = (Color){ 70, 70, 90, 255 };
+        }
+        DrawRectangleRounded(r, 0.2f, 8, btnCol);
+        DrawRectangleRoundedLines(r, 0.2f, 8, (Color){ 90, 90, 110, 255 });
+        const char* zeroStr = "0";
+        int zw = MeasureText(zeroStr, 24);
+        DrawText(zeroStr, (int)(r.x + r.width / 2 - zw / 2), (int)(r.y + 13), 24, RAYWHITE);
+    }
+
+    // ENTER button
+    {
+        Rectangle r = { gridStartX + 2 * (HAZARD_BTN_W + HAZARD_BTN_GAP), row4Y, HAZARD_BTN_W, HAZARD_BTN_H };
+        Color btnCol = (puzzle->inputLength == 8) ? (Color){ 40, 100, 40, 255 } : (Color){ 40, 60, 40, 255 };
+        if (CheckCollisionPointRec(GetVirtualMouse(), r) && puzzle->inputLength == 8) btnCol = (Color){ 50, 140, 50, 255 };
+        DrawRectangleRounded(r, 0.2f, 8, btnCol);
+        DrawRectangleRoundedLines(r, 0.2f, 8, (Color){ 60, 120, 60, 255 });
+        const char* entStr = "OK";
+        int ew = MeasureText(entStr, 18);
+        DrawText(entStr, (int)(r.x + r.width / 2 - ew / 2), (int)(r.y + 16), 18, RAYWHITE);
+    }
+
+    // ── Error message ────────────────────────────────────────────────────────
+    if (puzzle->state == HAZARD_FAIL) {
+        const char* errMsg = "WRONG CODE";
+        int ew = MeasureText(errMsg, 20);
+        DrawText(errMsg, (int)(panelX + HAZARD_PANEL_W / 2 - ew / 2), (int)(row4Y + HAZARD_BTN_H + 15), 20, RED);
+    }
+
+    // ── Close hint ───────────────────────────────────────────────────────────
+    const char* hint = "Press 'E' to close";
+    int hw = MeasureText(hint, 14);
+    DrawText(hint, (int)(panelX + HAZARD_PANEL_W / 2 - hw / 2), (int)(panelY + HAZARD_PANEL_H - 25), 14, GRAY);
+}

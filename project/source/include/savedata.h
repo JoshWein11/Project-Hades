@@ -33,6 +33,7 @@ typedef struct {
     // Inventory
     bool  hasKeycardA;
     bool  hasKeycardB;
+    bool  hasHazmatSuit;
 
     // Events
     bool  forceDialogueTriggered;

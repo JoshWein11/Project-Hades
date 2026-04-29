@@ -1,0 +1,93 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+CMD|CHAR|ELIAS|elias_l.png|elias_r.png
+---
+CMD|BG|stage4_cutscene1.qoi
+CMD|BGM|bgm3.wav
+CMD|WAIT|1.0
+---
+ADRIAN|left
+I found you... hang on
+---
+CMD|BG|stage4_cutscene2.qoi
+CMD|WAIT|1.0
+---
+ELIAS|right
+Adrian... you made it back...
+---
+ADRIAN|left
+What happened here?
+---
+ELIAS|right
+Hades... it doesn't just attack...
+it uses hosts... merges with them to stabilize...
+---
+ADRIAN|left
+It can merge with people?
+---
+ELIAS|right
+Yes... but it's unstable... most don't survive the process...
+---
+ADRIAN|left
+And you?
+---
+ELIAS|right
+It tried... I got lucky... if you can even call it that...
+---
+ELIAS|right
+Listen... you need to know this...
+---
+ADRIAN|left
+I'm listening.
+---
+ELIAS|right
+The neck... there's a core... that's where it's weakest...
+---
+ADRIAN|left
+Got it.
+---
+ELIAS|right
+Don't face it head-on... it adapts... watch its movements... 
+wait for an opening...
+---
+ADRIAN|left
+I understand.
+---
+ELIAS|right
+There's a route... to the Central Chamber... maintenance corridors...
+---
+ADRIAN|left
+Show me.
+---
+ELIAS|right
+I've marked it... it should get you there... if you're careful...
+---
+ADRIAN|left
+Thank you.
+---
+ELIAS|right
+Adrian... if you find anyone...
+---
+ADRIAN|left
+I will.
+---
+ELIAS|right
+Don't hesitate to finish this...
+---
+CMD|BG|stage4_cutscene3.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+...
+---
+ADRIAN|left
+I won't waste this chance.
+---
+CMD|TITLE|Objective : Reach the Central Chamber.
+---
+
+
+
+
+
+

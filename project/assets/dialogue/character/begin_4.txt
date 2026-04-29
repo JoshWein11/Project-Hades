@@ -1,0 +1,12 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+---
+ADRIAN|left
+This place... it's getting worse. There's too many of them.
+---
+ADRIAN|left
+No turning back... just keep moving
+---
+ORION|right
+Power restoration required to access the Central Control Chamber.
+---

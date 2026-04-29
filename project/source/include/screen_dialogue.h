@@ -16,7 +16,8 @@ typedef enum {
     EVENT_WAIT,
     EVENT_TITLE,
     EVENT_ANIM,
-    EVENT_CAMERA
+    EVENT_CAMERA,
+    EVENT_CHOICE
 } EventType;
 
 typedef struct {
@@ -43,5 +44,9 @@ void LoadDialogueFile(const char* dialogueFile);
 
 // Returns the current camera offset applied by active EVENT_CAMERA dialogues
 Vector2 GetDialogueCameraOffset(void);
+
+// Returns the result of the last EVENT_CHOICE interaction:
+//   0 = no choice made yet, 1 = first option (Yes), 2 = second option (Wait/No)
+int GetDialogueChoiceResult(void);
 
 #endif // SCREEN_DIALOGUE_H

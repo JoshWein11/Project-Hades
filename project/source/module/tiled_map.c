@@ -15,6 +15,7 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
     mapData->orion_off = LoadTexture("../assets/images/tileset/orion off.png");
     mapData->orion = LoadTexture("../assets/images/tileset/orion.png");
     mapData->stage3tileset = LoadTexture("../assets/images/tileset/stage 3 tileset.png");
+    mapData->stage4tileset = LoadTexture("../assets/images/tileset/stage 4 tileset.png");
     mapData->collisionCount = 0;
     mapData->navNodeCount   = 0;
     mapData->enemySpawnCount = 0;
@@ -81,6 +82,15 @@ void LoadTiledMap(MapData* mapData, const char* jsonPath) {
                         mapData->spawnPoint.x = obj->x;
                         mapData->spawnPoint.y = obj->y;
                         mapData->hasSpawnPoint = true;
+                    }
+                }
+                // ── Boss Spawn layer ──
+                else if (layer->name.ptr && strcmp(layer->name.ptr, "Boss") == 0) {
+                    cute_tiled_object_t* obj = layer->objects;
+                    if (obj) { // Just take the first object in the layer
+                        mapData->bossSpawnPoint.x = obj->x;
+                        mapData->bossSpawnPoint.y = obj->y;
+                        mapData->hasBossSpawnPoint = true;
                     }
                 }
                 // ── Puzzle layer → load as interactable puzzle objects ──
@@ -212,6 +222,8 @@ void DrawTiledMap(MapData* mapData) {
                             tex = mapData->orion;
                         } else if (strstr(ts_ident, "stage 3 tileset")) {
                             tex = mapData->stage3tileset;
+                        } else if (strstr(ts_ident, "stage 4 tileset")) {
+                            tex = mapData->stage4tileset;
                         }
                     }
                     
@@ -277,4 +289,5 @@ void UnloadTiledMap(MapData* mapData) { //Unload Tiled Map
     UnloadTexture(mapData->orion_off);
     UnloadTexture(mapData->orion);
     UnloadTexture(mapData->stage3tileset);
+    UnloadTexture(mapData->stage4tileset);
 }

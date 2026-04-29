@@ -51,6 +51,7 @@ typedef struct {
     Texture2D orion_off;
     Texture2D orion;
     Texture2D stage3tileset;
+    Texture2D stage4tileset;
     
     Rectangle collisionRecs[MAX_COLLISION_RECS];
     int collisionCount;
@@ -75,6 +76,9 @@ typedef struct {
 
     Vector2   spawnPoint;
     bool      hasSpawnPoint;
+
+    Vector2   bossSpawnPoint;
+    bool      hasBossSpawnPoint;
 } MapData;
 
 void LoadTiledMap(MapData* mapData, const char* jsonPath); //Load Tiled Map From Assets JSON File

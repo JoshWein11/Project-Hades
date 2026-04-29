@@ -7,6 +7,7 @@
 #include "tiled_map.h"
 #include "setting.h"
 #include "enemy.h"
+#include "boss.h"
 #include "savedata.h"
 #include "screen_dialogue.h"
 #include "puzzle.h"
@@ -23,6 +24,10 @@ static Texture2D enemySpriteR[ENEMY_TYPE_COUNT];
 static Texture2D enemySpriteL[ENEMY_TYPE_COUNT];
 
 static bool isPaused = false;
+
+static Boss currentBoss;
+static Texture2D bossSprite;
+static Texture2D meteorSprite;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Objective System
@@ -92,6 +97,14 @@ static bool hasKeycardB = false;
 static float pickupTimer = 0.0f;
 static const char* pickupText = "";
 static bool nearAct3Exit = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hazard Password Puzzle & Hazmat Suit (Act 5 / Level 4)
+// ─────────────────────────────────────────────────────────────────────────────
+static HazardPuzzle hazardPuzzle;
+static int          hazardMapIndex = -1;
+static bool         hazardNearby = false;
+static bool         hasHazmatSuit = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-Game Dialogue System
@@ -378,7 +391,7 @@ static void SetupAct(int act)
             }
             break;
 
-        case 4: // ACT 5 — Level 4 (final levels setup stub)
+        case 4: // ACT 5 — Level 4
             LoadTiledMap(&map, "../assets/map/level 4.json");
             chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
             enemySpriteR[ENEMY_TYPE_SLIME]    = LoadTexture("../assets/enemy/slime_abberant_r.png");
@@ -391,6 +404,35 @@ static void SetupAct(int act)
             enemySpriteL[ENEMY_TYPE_MUSHROOM] = LoadTexture("../assets/enemy/mushroom_l.png");
             SpawnEnemiesFromMap();
             displayObjectives = true;
+
+            // Reset stale state from previous acts
+            note2MapIndex = -1;
+            note2Active = false;
+            nearbyImageIndex = -1;
+            activeImageIndex = -1;
+            rgbNearby = false;
+            codePuzzleNearby = false;
+            nearbySequenceBtn = -1;
+            nearAct3Exit = false;
+            nearAct4Exit = false;
+
+            // Scan for hazard puzzle object
+            hazardMapIndex = -1;
+            hazardNearby = false;
+            for (int i = 0; i < map.puzzleObjectCount; i++) {
+                if (strcmp(map.puzzleObjects[i].name, "hazmat") == 0) {
+                    hazardMapIndex = i;
+                }
+            }
+            break;
+
+        case 5: // Boss map
+            LoadTiledMap(&map, "../assets/map/boss.json");
+            chapterSpawnPos = map.hasSpawnPoint ? map.spawnPoint : (Vector2){ 600, 867 };
+            Vector2 bossPos = map.hasBossSpawnPoint ? map.bossSpawnPoint : (Vector2){ 1546, 1248 };
+            SpawnEnemiesFromMap();
+            displayObjectives = true;
+            InitBoss(&currentBoss, bossPos, bossSprite, meteorSprite, 500.0f, 1000.0f);
             break;
 
         default:
@@ -431,8 +473,33 @@ void InitScreenGameplay(void)
     deathFadeAlpha = 0.0f;
     currentChapter = 0;
     forceDialogueTriggered = false;
+    hasHazmatSuit = false;
 
-    // ── Load Act 3 specific puzzle assets ─────────────────────────────────────
+    // Inventory
+    hasKeycardA = false;
+    hasKeycardB = false;
+
+    // Puzzle / interaction states
+    isInGameDialogue = false;
+    nearbyCharacterIndex = -1;
+    nearbyImageIndex = -1;
+    activeImageIndex = -1;
+    note2MapIndex = -1;
+    note2Active = false;
+    rgbNearby = false;
+    codePuzzleNearby = false;
+    nearbySequenceBtn = -1;
+    nearbyGenIndex = -1;
+    activeGenIndex = -1;
+    nearOrionTrigger = false;
+    nearAct3Exit = false;
+    nearAct4Exit = false;
+    hazardMapIndex = -1;
+    hazardNearby = false;
+    pickupTimer = 0.0f;
+    pickupText = "";
+
+    // ── Load puzzle assets ────────────────────────────────────────────────────
     imgCode = LoadTexture("../assets/images/code.png");
     imgRule = LoadTexture("../assets/images/rule.png");
     imgNote2 = LoadTexture("../assets/images/code_2.png");
@@ -440,8 +507,12 @@ void InitScreenGameplay(void)
     Texture2D bg2 = LoadTexture("../assets/images/puzzle/rgb_2.png");
     Texture2D bg3 = LoadTexture("../assets/images/puzzle/rgb_3.png");
     InitRGBPuzzle(&rgbPuzzle, bg1, bg2, bg3);
+    InitHazardPuzzle(&hazardPuzzle);
     sfxButton = LoadSound("../assets/sfx/button.wav");
     sfxFail = LoadSound("../assets/sfx/button_fail.wav");
+
+    bossSprite = LoadTexture("../assets/enemy/boss.png");
+    meteorSprite = LoadTexture("../assets/images/meteor.png");
 
     // ── Load first act ────────────────────────────────────────────────────────
     SetupAct(0);
@@ -514,6 +585,13 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             GameScreen result = UpdateScreenDialogue(gameAudio);
             if (result == GAMEPLAY) { // Finished playing sequence
                 isInGameDialogue = false;
+                int choice = GetDialogueChoiceResult();
+                if (currentAct == 4 && choice == 1) {
+                    // Player chose "Yes" → transition to boss map
+                    UnloadScreenDialogue();
+                    SetupAct(5);
+                    return GAMEPLAY;
+                }
                 UnloadScreenDialogue();
             }
             return GAMEPLAY; // Skip all other gameplay updates while discussing
@@ -561,6 +639,23 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                 pickupText = "- KEYCARD A ACQUIRED -";
             }
             return GAMEPLAY; // Skip all other gameplay updates while puzzle is open
+        }
+
+        // ── Hazard Puzzle Active: freeze gameplay, process keypad ─────────────
+        if (hazardPuzzle.active) {
+            if (IsKeyPressed(KEY_E)) {
+                CloseHazardPuzzle(&hazardPuzzle);
+            } else if (UpdateHazardPuzzle(&hazardPuzzle, GetVirtualMouse(), sfxButton, sfxFail)) {
+                // Puzzle solved!
+                printf("[Puzzle] Hazard password solved!\n");
+                hasHazmatSuit = true;
+                pickupTimer = 4.0f;
+                pickupText = "- HAZMAT SUIT ACQUIRED -";
+                // Trigger success dialogue
+                LoadDialogueFile("../assets/dialogue/hazard_room.txt");
+                isInGameDialogue = true;
+            }
+            return GAMEPLAY;
         }
 
         // ── Puzzle UI Active: freeze gameplay, only process puzzle input ─────
@@ -802,7 +897,28 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     }
                 }
             }
+        } // <-- End of if (displayObjectives)
+
+        // ── Act 5 (Level 4) Interactables (runs independently) ─────
+        if (currentAct == 4) {
+            hazardNearby = false;
+
+            Rectangle playerHitbox = {
+                player.position.x, player.position.y,
+                player.frameRec.width * player.scale, player.frameRec.height * player.scale
+            };
+
+            // Check hazard puzzle proximity
+            if (hazardMapIndex >= 0 && !hazardPuzzle.solved) {
+                if (CheckCollisionRecs(playerHitbox, map.puzzleObjects[hazardMapIndex].bounds)) {
+                    hazardNearby = true;
+                    if (IsKeyPressed(KEY_E)) {
+                        OpenHazardPuzzle(&hazardPuzzle);
+                    }
+                }
+            }
         }
+
 
     Vector2 playerCentre = {
         player.position.x + (player.frameRec.width  * player.scale) * 0.5f,
@@ -886,8 +1002,56 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
         }
     }
 
+    // ── Boss Collision & Update ───────────────────────────────────────────────
+    if (currentAct == 5) {
+        bool playerHitByBoss = false;
+        float bossDamage = 0.0f;
+        UpdateBoss(&currentBoss, playerCentre, dt, map.collisionRecs, map.collisionCount, &playerHitByBoss, &bossDamage);
+        
+        if (playerHitByBoss && player.hitInvincibleTimer <= 0.0f && !player.playerInvincible) {
+            player.health -= bossDamage;
+            if (player.health < 0.0f) player.health = 0.0f;
+            player.hitInvincibleTimer = 1.0f;
+            TriggerShake(8.0f, 0.20f);
+        }
+    }
+
     // ── Weapons / bullets ─────────────────────────────────────────────────────
     UpdateWeapon(&playerWeapon, dt, map.collisionRecs, map.collisionCount);
+
+    if (currentAct == 5 && currentBoss.state != BOSS_STATE_DEAD) {
+        for (int b = 0; b < MAX_BULLETS; b++) {
+            if (playerWeapon.bullets[b].active) {
+                Vector2 bPos = playerWeapon.bullets[b].position;
+                float bRad = playerWeapon.bullets[b].radius;
+                
+                // Check boss body
+                Rectangle bossBounds = {currentBoss.position.x, currentBoss.position.y, currentBoss.frameWidth * currentBoss.scale, currentBoss.frameHeight * currentBoss.scale};
+                if (CheckCollisionCircleRec(bPos, bRad, bossBounds)) {
+                    playerWeapon.bullets[b].active = false;
+                    DamageBoss(&currentBoss, 34.0f); // Same as enemy damage
+                    TriggerShake(4.0f, 0.10f);
+                    continue;
+                }
+                
+                // Check cores (only if in invincible state)
+                if (currentBoss.state == BOSS_STATE_STAGE1_INVINCIBLE) {
+                    for (int c = 0; c < BOSS_MAX_CORES; c++) {
+                        if (currentBoss.cores[c].active) {
+                            // Simple circle vs circle
+                            float dist = Vector2Distance(bPos, currentBoss.cores[c].position);
+                            if (dist < (bRad + 16.0f)) {
+                                playerWeapon.bullets[b].active = false;
+                                DamageBossCore(&currentBoss, c, 34.0f);
+                                TriggerShake(2.0f, 0.08f);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             Vector2 startPos = { playerCentre.x, playerCentre.y };
@@ -927,6 +1091,11 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     enemies[i].position = enemies[i].waypoints[0];
                     enemies[i].waypointIndex = 0;
                     enemies[i].navPathActive = false;
+                }
+
+                if (currentAct == 5) {
+                    Vector2 bossPos = map.hasBossSpawnPoint ? map.bossSpawnPoint : (Vector2){ 1546, 1248 };
+                    InitBoss(&currentBoss, bossPos, bossSprite, meteorSprite, 500.0f, 1000.0f);
                 }
 
                 // Reset generator puzzle progress
@@ -1003,6 +1172,7 @@ void DrawScreenGameplay(void)
         DrawTiledMap(&map);
         DrawWeapon(&playerWeapon);
         for (int i = 0; i < enemyCount; i++) DrawEnemy(&enemies[i]);
+        if (currentAct == 5) DrawBoss(&currentBoss);
         DrawCharacter(&player);
 
         // ── World-space green checkmark on solved generators ──────────────────
@@ -1087,6 +1257,12 @@ void DrawScreenGameplay(void)
                 targetCenterX = map.nextActTrigger.x + map.nextActTrigger.width / 2.0f;
                 targetTopY = map.nextActTrigger.y - 5.0f;
             }
+            // Hazard Puzzle prompt (Act 5 / Level 4)
+            else if (hazardNearby && !hazardPuzzle.solved && !hazardPuzzle.active) {
+                prompt = "Press \"E\" to interact";
+                targetCenterX = map.puzzleObjects[hazardMapIndex].bounds.x + map.puzzleObjects[hazardMapIndex].bounds.width / 2.0f;
+                targetTopY = map.puzzleObjects[hazardMapIndex].bounds.y - 5.0f;
+            }
 
             if (prompt) {
                 int pw = MeasureText(prompt, 10);
@@ -1107,6 +1283,7 @@ void DrawScreenGameplay(void)
 
     // ── HUD (screen-space, no camera transform) ───────────────────────────────
     DrawCharacterHUD(&player, player.sprite);
+    if (currentAct == 5) DrawBossUI(&currentBoss);
     
     int textYpos = 20;
 
@@ -1217,6 +1394,10 @@ void DrawScreenGameplay(void)
 
     if (codePuzzle.active) {
         DrawCodePuzzle(&codePuzzle);
+    }
+
+    if (hazardPuzzle.active) {
+        DrawHazardPuzzle(&hazardPuzzle);
     }
 
     // Draw pickup notification popups
@@ -1340,6 +1521,9 @@ void UnloadScreenGameplay(void)
         if (enemySpriteL[t].id != 0) UnloadTexture(enemySpriteL[t]);
     }
     
+    if (bossSprite.id != 0) UnloadTexture(bossSprite);
+    if (meteorSprite.id != 0) UnloadTexture(meteorSprite);
+    
     // Unload puzzle assets
     if (imgCode.id != 0) UnloadTexture(imgCode);
     if (imgNote2.id != 0) UnloadTexture(imgNote2);
@@ -1373,6 +1557,7 @@ void GetGameplaySaveData(SaveData* data)
     // Inventory
     data->hasKeycardA    = hasKeycardA;
     data->hasKeycardB    = hasKeycardB;
+    data->hasHazmatSuit  = hasHazmatSuit;
 
     // Events
     data->forceDialogueTriggered = forceDialogueTriggered;
@@ -1412,6 +1597,7 @@ void RestoreGameplayFromSave(const SaveData* data)
     // Inventory
     hasKeycardA = data->hasKeycardA;
     hasKeycardB = data->hasKeycardB;
+    hasHazmatSuit = data->hasHazmatSuit;
 
     // Events
     forceDialogueTriggered = data->forceDialogueTriggered;

@@ -120,4 +120,38 @@ void CloseCodePuzzle(CodePuzzle* puzzle);
 bool UpdateCodePuzzle(CodePuzzle* puzzle, Vector2 mousePos, Sound btnSfx, Sound failSfx);
 void DrawCodePuzzle(CodePuzzle* puzzle);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HazardPuzzle — 8-digit password keypad minigame (code: 5961-6769).
+// ─────────────────────────────────────────────────────────────────────────────
+typedef struct {
+    Rectangle bounds;
+    int number;        // 0-9
+    float pressTimer;  // Visual feedback when clicked
+} HazardButton;
+
+typedef enum {
+    HAZARD_INPUT,
+    HAZARD_FAIL,
+    HAZARD_SUCCESS
+} HazardPuzzleState;
+
+typedef struct {
+    bool active;
+    bool solved;
+    HazardPuzzleState state;
+
+    char code[9];       // Correct code: "59616769"
+    char input[9];      // Player's typed digits so far
+    int  inputLength;   // How many digits entered (0-8)
+
+    HazardButton buttons[10]; // 0-9 digit buttons
+    float failTimer;          // Brief flash on wrong code
+} HazardPuzzle;
+
+void InitHazardPuzzle(HazardPuzzle* puzzle);
+void OpenHazardPuzzle(HazardPuzzle* puzzle);
+void CloseHazardPuzzle(HazardPuzzle* puzzle);
+bool UpdateHazardPuzzle(HazardPuzzle* puzzle, Vector2 mousePos, Sound btnSfx, Sound failSfx);
+void DrawHazardPuzzle(HazardPuzzle* puzzle);
+
 #endif

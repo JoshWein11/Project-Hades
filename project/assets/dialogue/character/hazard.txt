@@ -1,5 +1,8 @@
 CMD|CHAR|ORION|orion_l.png|orion_r.png
 ---
 ORION|left
-This might be usefull, try write it down.
+This might be useful, try writing it down.
+---
+ORION|left
+Quick grab a pen and paper (or notepad)
 ---

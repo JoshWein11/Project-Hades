@@ -71,6 +71,12 @@ static Vector2 startCamOffset = {0};
 static float camShiftTimer = 0.0f;
 static float camShiftDuration = 0.0f;
 
+// State for CHOICE event (Yes/No branching)
+static char choiceLabel1[64] = {0};  // First option label (e.g. "Yes")
+static char choiceLabel2[64] = {0};  // Second option label (e.g. "Wait")
+static int  choiceHovered = 0;       // 0 = none, 1 = first, 2 = second
+static int  lastChoiceResult = 0;    // 0 = no choice, 1 = first picked, 2 = second picked
+
 // Title card fade state
 typedef enum { TITLE_FADE_IN, TITLE_HOLD, TITLE_FADE_OUT } TitlePhase;
 static TitlePhase titlePhase = TITLE_FADE_IN;
@@ -238,6 +244,10 @@ void InitScreenDialogue(const char* dialogueFile)
     startCamOffset = (Vector2){0, 0};
     camShiftTimer = 0.0f;
     camShiftDuration = 0.0f;
+    lastChoiceResult = 0;
+    choiceHovered = 0;
+    memset(choiceLabel1, 0, sizeof(choiceLabel1));
+    memset(choiceLabel2, 0, sizeof(choiceLabel2));
     memset(&animTexture, 0, sizeof(Texture2D));
     memset(&activeBg, 0, sizeof(Texture2D));
     memset(&activeBgm, 0, sizeof(Music));
@@ -375,6 +385,29 @@ void InitScreenDialogue(const char* dialogueFile)
                                     ev->floatArg2 = (float)atof(dy);
                                     ev->floatArg3 = (float)atof(dur);
                                     eventCount++;
+                                } else if (strcmp(cmdType, "CHOICE") == 0) {
+                                    // CMD|CHOICE|Label1|Label2
+                                    // cmdArg = "Label1|Label2"
+                                    char label1[64] = {0};
+                                    char label2[64] = {0};
+                                    char* cp1 = strchr(cmdArg, '|');
+                                    if (cp1) {
+                                        int l1Len = (int)(cp1 - cmdArg);
+                                        if (l1Len >= 64) l1Len = 63;
+                                        strncpy(label1, cmdArg, l1Len);
+                                        label1[l1Len] = '\0';
+                                        TrimString(label1);
+                                        strncpy(label2, cp1 + 1, 63);
+                                        label2[63] = '\0';
+                                        TrimString(label2);
+                                    } else {
+                                        strncpy(label1, "Yes", 63);
+                                        strncpy(label2, "No", 63);
+                                    }
+                                    ev->type = EVENT_CHOICE;
+                                    // Store both labels in text separated by '|'
+                                    snprintf(ev->text, sizeof(ev->text), "%s|%s", label1, label2);
+                                    eventCount++;
                                 } else if (strcmp(cmdType, "CHAR") == 0 && charRegistryCount < MAX_CHARACTERS) {
                                     // CMD|CHAR|NAME|left_img.png|right_img.png
                                     // cmdArg = "NAME|left_img.png|right_img.png"
@@ -476,6 +509,7 @@ void ResetScreenDialogue(void)
     startCamOffset = (Vector2){0, 0};
     camShiftTimer = 0.0f;
     camShiftDuration = 0.0f;
+    choiceHovered = 0;
     
     if (hasActiveBgm) {
         StopMusicStream(activeBgm);
@@ -676,6 +710,57 @@ GameScreen UpdateScreenDialogue(Audio* audio)
             }
         }
     }
+    else if (current->type == EVENT_CHOICE) {
+        // Parse labels from stored text
+        if (choiceLabel1[0] == '\0') {
+            char temp[256];
+            strncpy(temp, current->text, 255);
+            temp[255] = '\0';
+            char* pipe = strchr(temp, '|');
+            if (pipe) {
+                *pipe = '\0';
+                strncpy(choiceLabel1, temp, 63);
+                choiceLabel1[63] = '\0';
+                strncpy(choiceLabel2, pipe + 1, 63);
+                choiceLabel2[63] = '\0';
+            } else {
+                strncpy(choiceLabel1, "Yes", 63);
+                strncpy(choiceLabel2, "No", 63);
+            }
+        }
+
+        // Determine hover from mouse position
+        Vector2 mousePoint = GetVirtualMouse();
+        int btnW = 200, btnH = 45, gap = 15;
+        float cx = VIRTUAL_WIDTH / 2.0f;
+        float cy = VIRTUAL_HEIGHT / 2.0f;
+        Rectangle btn1 = { cx - btnW / 2.0f, cy - btnH - gap / 2.0f, (float)btnW, (float)btnH };
+        Rectangle btn2 = { cx - btnW / 2.0f, cy + gap / 2.0f, (float)btnW, (float)btnH };
+
+        if (CheckCollisionPointRec(mousePoint, btn1)) choiceHovered = 1;
+        else if (CheckCollisionPointRec(mousePoint, btn2)) choiceHovered = 2;
+
+        // Keyboard navigation
+        if (IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_W)) choiceHovered = 1;
+        if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) choiceHovered = 2;
+
+        // Selection
+        bool confirmed = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+        if (confirmed && choiceHovered > 0) {
+            lastChoiceResult = choiceHovered;
+            if (choiceHovered == 2) {
+                // "Wait" / decline — end dialogue immediately
+                currentEvent = eventCount;
+            } else {
+                // "Yes" / affirm — advance normally
+                currentEvent++;
+            }
+            // Reset choice labels for next use
+            memset(choiceLabel1, 0, sizeof(choiceLabel1));
+            memset(choiceLabel2, 0, sizeof(choiceLabel2));
+            choiceHovered = 0;
+        }
+    }
 
     return DIALOGUE;
 }
@@ -715,6 +800,41 @@ void DrawScreenDialogue(void)
     }
 
     if (currentEvent >= eventCount || events[currentEvent].type != EVENT_DIALOGUE) {
+        // ── Choice event: draw two-button modal ──────────────────────────────
+        if (currentEvent < eventCount && events[currentEvent].type == EVENT_CHOICE) {
+            // Semi-transparent backdrop
+            DrawRectangle(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, Fade(BLACK, 0.5f));
+
+            int btnW = 200, btnH = 45, gap = 15;
+            float cx = VIRTUAL_WIDTH / 2.0f;
+            float cy = VIRTUAL_HEIGHT / 2.0f;
+
+            // Question prompt above buttons
+            const char* questionText = "Make your choice";
+            int qw = MeasureText(questionText, 24);
+            DrawText(questionText, (int)(cx - qw / 2), (int)(cy - btnH - gap / 2 - 40), 24, WHITE);
+
+            Rectangle btn1 = { cx - btnW / 2.0f, cy - btnH - gap / 2.0f, (float)btnW, (float)btnH };
+            Rectangle btn2 = { cx - btnW / 2.0f, cy + gap / 2.0f, (float)btnW, (float)btnH };
+
+            // Button 1 (affirmative)
+            Color bg1 = (choiceHovered == 1) ? Fade(WHITE, 0.25f) : Fade(BLACK, 0.8f);
+            Color border1 = (choiceHovered == 1) ? YELLOW : WHITE;
+            DrawRectangleRec(btn1, bg1);
+            DrawRectangleLinesEx(btn1, 2.0f, border1);
+            int t1w = MeasureText(choiceLabel1, 22);
+            DrawText(choiceLabel1, (int)(cx - t1w / 2), (int)(btn1.y + 12), 22,
+                     (choiceHovered == 1) ? YELLOW : WHITE);
+
+            // Button 2 (decline)
+            Color bg2 = (choiceHovered == 2) ? Fade(WHITE, 0.25f) : Fade(BLACK, 0.8f);
+            Color border2 = (choiceHovered == 2) ? YELLOW : WHITE;
+            DrawRectangleRec(btn2, bg2);
+            DrawRectangleLinesEx(btn2, 2.0f, border2);
+            int t2w = MeasureText(choiceLabel2, 22);
+            DrawText(choiceLabel2, (int)(cx - t2w / 2), (int)(btn2.y + 12), 22,
+                     (choiceHovered == 2) ? YELLOW : WHITE);
+        }
         return; // Only draw UI elements if we are on a dialogue prompt
     }
 
@@ -811,4 +931,9 @@ void LoadDialogueFile(const char* dialogueFile)
 Vector2 GetDialogueCameraOffset(void)
 {
     return currentCamOffset;
+}
+
+int GetDialogueChoiceResult(void)
+{
+    return lastChoiceResult;
 }

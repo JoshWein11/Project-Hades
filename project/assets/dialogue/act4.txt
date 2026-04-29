@@ -38,6 +38,8 @@ You shouldn't be here... it's not safe...
 ---
 ADRIAN|left
 None of this is safe. Just stay alive.
---- 
+---
+CMD|TITLE|Objective : Help Elias in Sector 7.
+---
 
 

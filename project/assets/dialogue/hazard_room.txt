@@ -1,0 +1,22 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+---
+CMD|BG|hazmat_cutscene_1.qoi
+CMD|BGM|bgm1.wav
+CMD|WAIT|1.0
+---
+ADRIAN|left
+What's this...? A locker room?
+---
+ADRIAN|left
+Might be worth checking
+---
+CMD|BG|hazmat_cutscene_2.qoi
+CMD|WAIT|1.0
+---
+ADRIAN|left
+Woah, a hazmat suit... This might help
+---
+ADRIAN|left
+Better than nothing I guess.
+---
+
