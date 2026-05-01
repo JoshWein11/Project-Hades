@@ -15,15 +15,22 @@ static void BossShoot(Boss* boss, Vector2 start, Vector2 dir, float speed) {
     }
 }
 
-void InitBoss(Boss* boss, Vector2 spawnPos, Texture2D sprite, Texture2D meteorSprite, float baseMaxHp, float stage2MaxHp) {
+void InitBoss(Boss* boss, Vector2 spawnPos, Texture2D s1Idle, Texture2D s1Meteor, Texture2D s2Idle, Texture2D s2Charge, Texture2D meteorProjectile, float baseMaxHp, float stage2MaxHp) {
     boss->position = spawnPos;
     boss->spawnPosition = spawnPos;
-    boss->sprite = sprite;
-    boss->meteorSprite = meteorSprite;
+    boss->stage1IdleTex = s1Idle;
+    boss->stage1MeteorTex = s1Meteor;
+    boss->stage2IdleTex = s2Idle;
+    boss->stage2ChargeTex = s2Charge;
+    boss->meteorProjectileTex = meteorProjectile;
     
-    // Force logical and collision size to exactly 64x64 (2x2 tiles)
-    boss->frameWidth = 64;
-    boss->frameHeight = 64;
+    boss->animFrame = 0;
+    boss->animTimer = 0.0f;
+    boss->facingRight = false;
+    
+    // Force logical and collision size to exactly 128x128 (4x4 tiles)
+    boss->frameWidth = 128;
+    boss->frameHeight = 128;
     boss->scale = 1.0f;
     
     // Recenter position so spawnPos is the center of the boss
@@ -109,6 +116,48 @@ void UpdateBoss(Boss* boss, Vector2 playerPos, float dt, Rectangle* colliders, i
     if (boss->state == BOSS_STATE_DEAD) return;
 
     if (boss->flashTimer > 0) boss->flashTimer -= dt;
+
+    // Direction handling
+    Vector2 bCenter = BossCentre(boss);
+    boss->facingRight = (playerPos.x > bCenter.x);
+
+    // Animation logic
+    float animFPS = 2.0f; // Default for Stage 1 Idle
+    int maxFrames = 2;
+
+    if (boss->stage == 1) {
+        if (boss->currentAttack == BOSS_ATTACK_METEOR) {
+            animFPS = 10.0f;
+            maxFrames = 15;
+        } else {
+            animFPS = 2.0f;
+            maxFrames = 2;
+        }
+    } else { // Stage 2
+        if (boss->currentAttack == BOSS_ATTACK_CHARGE) {
+            animFPS = 6.0f;
+            maxFrames = 8;
+        } else {
+            animFPS = 3.0f;
+            maxFrames = 4;
+        }
+    }
+
+    boss->animTimer += dt;
+    if (boss->animTimer >= (1.0f / animFPS)) {
+        boss->animTimer = 0.0f;
+        boss->animFrame = (boss->animFrame + 1) % maxFrames;
+    }
+
+    // Reset frame if switching attacks (simplified check)
+    static BossAttackType lastAttack = BOSS_ATTACK_NONE;
+    static int lastStage = 1;
+    if (boss->currentAttack != lastAttack || boss->stage != lastStage) {
+        boss->animFrame = 0;
+        boss->animTimer = 0.0f;
+        lastAttack = boss->currentAttack;
+        lastStage = boss->stage;
+    }
 
     // Update weapon (wall collisions)
     UpdateWeapon(&boss->weapon, dt, colliders, colliderCount);
@@ -323,25 +372,25 @@ void DrawBoss(Boss* boss) {
             DrawCircleLines(boss->meteors[i].targetPos.x, boss->meteors[i].targetPos.y, boss->meteors[i].radius, RED);
             
             if (boss->meteors[i].stateTimer <= 1.0f) {
-                float xOffset = boss->meteors[i].currentYOffset * 0.577f; // 30 degrees to the right (starts left, moves right)
-                if (boss->meteorSprite.id != 0) {
-                    float sWidth = boss->meteorSprite.width * 0.67f;
-                    float sHeight = boss->meteorSprite.height * 0.67f;
+                float xOffset = boss->meteors[i].currentYOffset * 0.577f; // 30 degrees
+                if (boss->meteorProjectileTex.id != 0) {
+                    float sWidth = boss->meteorProjectileTex.width * 0.67f;
+                    float sHeight = boss->meteorProjectileTex.height * 0.67f;
                     Vector2 pos = {
                         boss->meteors[i].targetPos.x + xOffset - sWidth/2.0f,
                         boss->meteors[i].targetPos.y + boss->meteors[i].currentYOffset - sHeight/2.0f
                     };
-                    DrawTextureEx(boss->meteorSprite, pos, 0.0f, 0.67f, WHITE);
+                    DrawTextureEx(boss->meteorProjectileTex, pos, 0.0f, 0.67f, WHITE);
                 } else {
                     DrawCircle(boss->meteors[i].targetPos.x + xOffset, boss->meteors[i].targetPos.y + boss->meteors[i].currentYOffset, boss->meteors[i].radius, ORANGE);
                 }
             }
         } else if (boss->meteors[i].state == METEOR_IMPACT) {
-            if (boss->meteorSprite.id != 0) {
-                float sWidth = boss->meteorSprite.width * 0.67f;
-                float sHeight = boss->meteorSprite.height * 0.67f;
+            if (boss->meteorProjectileTex.id != 0) {
+                float sWidth = boss->meteorProjectileTex.width * 0.67f;
+                float sHeight = boss->meteorProjectileTex.height * 0.67f;
                 Vector2 pos = {boss->meteors[i].targetPos.x - sWidth/2.0f, boss->meteors[i].targetPos.y - sHeight/2.0f};
-                DrawTextureEx(boss->meteorSprite, pos, 0.0f, 0.67f, WHITE);
+                DrawTextureEx(boss->meteorProjectileTex, pos, 0.0f, 0.67f, WHITE);
             } else {
                 DrawCircle(boss->meteors[i].targetPos.x, boss->meteors[i].targetPos.y, boss->meteors[i].radius, ORANGE);
             }
@@ -352,13 +401,40 @@ void DrawBoss(Boss* boss) {
     // Draw Boss
     Color tint = (boss->flashTimer > 0) ? RED : WHITE;
     if (boss->state == BOSS_STATE_STAGE1_VULNERABLE) {
-        tint = (boss->flashTimer > 0) ? RED : LIGHTGRAY; // Show weakness
+        tint = (boss->flashTimer > 0) ? RED : LIGHTGRAY;
     }
     
-    if (boss->sprite.id != 0) {
-        Rectangle src = {0, 0, boss->sprite.width, boss->sprite.height};
-        Rectangle dest = {boss->position.x, boss->position.y, boss->frameWidth, boss->frameHeight};
-        DrawTexturePro(boss->sprite, src, dest, (Vector2){0,0}, 0.0f, tint);
+    Texture2D activeTex = {0};
+    int cols = 1;
+    
+    if (boss->stage == 1) {
+        if (boss->currentAttack == BOSS_ATTACK_METEOR) {
+            activeTex = boss->stage1MeteorTex;
+            cols = 15;
+        } else {
+            activeTex = boss->stage1IdleTex;
+            cols = 2;
+        }
+    } else { // Stage 2
+        if (boss->currentAttack == BOSS_ATTACK_CHARGE) {
+            activeTex = boss->stage2ChargeTex;
+            cols = 8;
+        } else {
+            activeTex = boss->stage2IdleTex;
+            cols = 4;
+        }
+    }
+
+    if (activeTex.id != 0) {
+        float srcW = (float)activeTex.width / cols;
+        float srcH = (float)activeTex.height / 2.0f;
+        Rectangle src = { 
+            (float)boss->animFrame * srcW, 
+            (boss->facingRight ? 1.0f : 0.0f) * srcH, 
+            srcW, srcH 
+        };
+        Rectangle dest = { boss->position.x, boss->position.y, (float)boss->frameWidth, (float)boss->frameHeight };
+        DrawTexturePro(activeTex, src, dest, (Vector2){0, 0}, 0.0f, tint);
     } else {
         DrawRectangle(boss->position.x, boss->position.y, boss->frameWidth, boss->frameHeight, tint);
     }

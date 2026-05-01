@@ -42,7 +42,7 @@ GameScreen UpdateScreenMenu(void)
     //Check if the mouse is clicked
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (CheckCollisionPointRec(mousePoint, startBtn)) {
-            return DIALOGUE;
+            return DIFFICULTY_SELECT;
         } else if (hasSave && CheckCollisionPointRec(mousePoint, loadBtn)) {
             TraceLog(LOG_INFO, "MENU: Load Game clicked");
             return LOAD_GAME;

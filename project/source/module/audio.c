@@ -15,6 +15,12 @@ void InitAudio(Audio* audio) {
     audio->sfxSpeaking[1] = LoadSound("../assets/sfx/speaking/speak2.wav");
     audio->sfxSpeaking[2] = LoadSound("../assets/sfx/speaking/speak3.wav");
     audio->sfxSpeaking[3] = LoadSound("../assets/sfx/speaking/speak4.wav");
+
+    audio->bossMusic = LoadMusicStream("../assets/music/boss.mp3");
+    audio->bossMusic.looping = true;
+
+    audio->gameMusic = LoadMusicStream("../assets/music/gamebacksound.mp3");
+    audio->gameMusic.looping = true;
 }
 
 void UnloadAudio(Audio* audio) {
@@ -30,6 +36,8 @@ void UnloadAudio(Audio* audio) {
     for (int i = 0; i < 4; i++) {
         UnloadSound(audio->sfxSpeaking[i]);
     }
+    UnloadMusicStream(audio->bossMusic);
+    UnloadMusicStream(audio->gameMusic);
 }
 
 void PlayRandomFootstep(Audio* audio) {

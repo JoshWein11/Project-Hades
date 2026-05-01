@@ -1,0 +1,13 @@
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+CMD|CAMTO|1546|1248|2.0
+---
+ADRIAN|left
+Another stage?!?!?!
+---
+ORION|right
+Prepare to dodge the charge attack
+---
+CMD|CAM|0|0|1.0
+---

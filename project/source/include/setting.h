@@ -9,6 +9,14 @@
 #define VIRTUAL_WIDTH  1280
 #define VIRTUAL_HEIGHT 720
 
+typedef enum {
+    DIFF_EASY = 0,
+    DIFF_NORMAL,
+    DIFF_HARD
+} GameDifficulty;
+
+extern GameDifficulty currentDifficulty;
+
 typedef struct {
     int screenWidth;
     int screenHeight;

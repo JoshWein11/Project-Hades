@@ -1,0 +1,110 @@
+CMD|CINEMATIC|3
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+---
+CMD|BG|preboss_scene1.qoi
+CMD|BGM|bgm3.wav
+CMD|WAIT|0.1
+---
+CMD|SFX|boss_1.mp3
+---
+ADRIAN|left
+This place... it's still standing...
+---
+CMD|SFX|boss_2.mp3
+---
+ADRIAN|left
+Lyra...?
+---
+CMD|SFX|boss_3.mp3
+---
+ADRIAN|left
+You have to be here...
+---
+CMD|SFX|boss_4.mp3
+---
+ADRIAN|left
+Her bag...
+---
+CMD|SFX|boss_5.mp3
+---
+ADRIAN|left
+She was here... no way she made it this far
+---
+CMD|SFX|boss_6.mp3
+---
+ADRIAN|left
+Lyra... where are you...
+---
+CMD|BG|preboss_scene2.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|boss_7.mp3
+---
+ADRIAN|left
+These marks... something fought here...
+---
+CMD|SFX|boss_8.mp3
+---
+ADRIAN|left
+No... please... don't let me be too late...
+---
+CMD|BG|preboss_scene3.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|boss_9.mp3
+---
+ORION|right
+Biological presence detected
+---
+CMD|SFX|boss_10.mp3
+---
+ADRIAN|left
+Lyra? Is that you?
+---
+CMD|SFX|boss_11.mp3
+---
+ADRIAN|left
+What is that...
+---
+CMD|SFX|boss_12.mp3
+---
+ADRIAN|left
+No... NO!
+---
+CMD|BG|preboss_scene4.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|boss_13.mp3
+---
+ORION|right
+Host identified : Lyra Voss
+---
+CMD|BG|preboss_scene5.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|boss_14.mp3
+---
+ADRIAN|left
+...No
+---
+CMD|SFX|boss_15.mp3
+---
+ADRIAN|left
+That's not possible
+---
+CMD|SFX|boss_16.mp3
+---
+ADRIAN|left
+Lyra...?
+---
+CMD|SFX|boss_17.mp3
+---
+ADRIAN|left
+What did it do to you..
+---
+CMD|SFX|boss_18.mp3
+---
+ADRIAN|left
+No... No... this can't be real...
+---

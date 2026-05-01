@@ -3,6 +3,7 @@
 #include "screen_gameplay.h"
 #include "character.h"
 #include "audio.h"
+#include "setting.h"
 #include "weapon.h"
 #include "tiled_map.h"
 #include "setting.h"
@@ -26,8 +27,11 @@ static Texture2D enemySpriteL[ENEMY_TYPE_COUNT];
 static bool isPaused = false;
 
 static Boss currentBoss;
-static Texture2D bossSprite;
-static Texture2D meteorSprite;
+static Texture2D bossS1Idle;
+static Texture2D bossS1Meteor;
+static Texture2D bossS2Idle;
+static Texture2D bossS2Charge;
+static Texture2D meteorProjectile;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Objective System
@@ -112,6 +116,11 @@ static bool         hasHazmatSuit = false;
 static bool isInGameDialogue = false;
 static int nearbyCharacterIndex = -1;
 static bool forceDialogueTriggered = false;
+static bool bossStage2CutscenePlayed = false;
+static bool pendingBossDialogue = false;
+static bool stage2DialogueActive = false;
+static bool bossDefeatedDialoguePlayed = false;
+static bool pendingCredits = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Enemy list — increase capacity and call InitEnemy multiple times to add more.
@@ -432,8 +441,9 @@ static void SetupAct(int act)
             Vector2 bossPos = map.hasBossSpawnPoint ? map.bossSpawnPoint : (Vector2){ 1546, 1248 };
             SpawnEnemiesFromMap();
             displayObjectives = true;
-            InitBoss(&currentBoss, bossPos, bossSprite, meteorSprite, 500.0f, 1000.0f);
+            InitBoss(&currentBoss, bossPos, bossS1Idle, bossS1Meteor, bossS2Idle, bossS2Charge, meteorProjectile, 500.0f, 1000.0f);
             break;
+
 
         default:
             break;
@@ -457,6 +467,13 @@ void InitScreenGameplay(void)
 
     // ── Weapon ────────────────────────────────────────────────────────────────
     InitWeapon(&playerWeapon);
+    if (currentDifficulty == DIFF_EASY) {
+        playerWeapon.shootCooldown = 1.0f;
+    } else if (currentDifficulty == DIFF_NORMAL) {
+        playerWeapon.shootCooldown = 1.35f;
+    } else {
+        playerWeapon.shootCooldown = 1.7f;
+    }
 
     // ── Camera ────────────────────────────────────────────────────────────────
     camera.target   = player.position;
@@ -498,6 +515,10 @@ void InitScreenGameplay(void)
     hazardNearby = false;
     pickupTimer = 0.0f;
     pickupText = "";
+    pendingBossDialogue = false;
+    stage2DialogueActive = false;
+    bossDefeatedDialoguePlayed = false;
+    pendingCredits = false;
 
     // ── Load puzzle assets ────────────────────────────────────────────────────
     imgCode = LoadTexture("../assets/images/code.png");
@@ -511,8 +532,11 @@ void InitScreenGameplay(void)
     sfxButton = LoadSound("../assets/sfx/button.wav");
     sfxFail = LoadSound("../assets/sfx/button_fail.wav");
 
-    bossSprite = LoadTexture("../assets/enemy/boss.png");
-    meteorSprite = LoadTexture("../assets/images/meteor.png");
+    bossS1Idle = LoadTexture("../assets/enemy/stage1boss_idle.png");
+    bossS1Meteor = LoadTexture("../assets/enemy/stage1boss_meteor.png");
+    bossS2Idle = LoadTexture("../assets/enemy/stage2boss_idle.png");
+    bossS2Charge = LoadTexture("../assets/enemy/stage2boss_charge.png");
+    meteorProjectile = LoadTexture("../assets/images/meteor.png");
 
     // ── Load first act ────────────────────────────────────────────────────────
     SetupAct(0);
@@ -528,7 +552,29 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     // ── Pending Map Transition ────────────────────────────────────────────────
     if (pendingAct != -1) {
         SetupAct(pendingAct);
+        if (pendingAct == 5) {
+            StopMusicStream(gameAudio->bg_menu_music);
+            StopMusicStream(gameAudio->gameMusic);
+            PlayMusicStream(gameAudio->bossMusic);
+        } else {
+            StopMusicStream(gameAudio->bossMusic);
+            if (!IsMusicStreamPlaying(gameAudio->gameMusic)) {
+                PlayMusicStream(gameAudio->gameMusic);
+            }
+        }
         pendingAct = -1;
+    }
+
+    // ── Gameplay background music (non-boss, non-dialogue) ───────────────────
+    if (currentAct != 5 && !isInGameDialogue) {
+        if (!IsMusicStreamPlaying(gameAudio->gameMusic)) {
+            PlayMusicStream(gameAudio->gameMusic);
+        }
+        UpdateMusicStream(gameAudio->gameMusic);
+    } else {
+        if (IsMusicStreamPlaying(gameAudio->gameMusic)) {
+            StopMusicStream(gameAudio->gameMusic);
+        }
     }
 
     // ── Pause Handle ──────────────────────────────────────────────────────────
@@ -574,6 +620,9 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     Vector2 camShift = GetDialogueCameraOffset();
     camera.target.x += camShift.x;
     camera.target.y += camShift.y;
+    
+    // Keep dialogue system aware of player position (for CAMTO)
+    SetDialoguePlayerPos(player.position);
 
     Vector2 mouseWorldPos = GetScreenToWorld2D(GetVirtualMouse(), camera);
 
@@ -586,10 +635,34 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             if (result == GAMEPLAY) { // Finished playing sequence
                 isInGameDialogue = false;
                 int choice = GetDialogueChoiceResult();
-                if (currentAct == 4 && choice == 1) {
-                    // Player chose "Yes" → transition to boss map
+
+                if (pendingCredits) {
+                    pendingCredits = false;
                     UnloadScreenDialogue();
-                    SetupAct(5);
+                    return CREDITS;
+                }
+
+                if (pendingBossDialogue) {
+                    pendingBossDialogue = false;
+                    UnloadScreenDialogue();
+                    SetupAct(5); // Now load the boss map
+                    StopMusicStream(gameAudio->bg_menu_music);
+                    StopMusicStream(gameAudio->gameMusic);
+                    PlayMusicStream(gameAudio->bossMusic);
+                    return GAMEPLAY;
+                }
+
+                if (stage2DialogueActive) {
+                    stage2DialogueActive = false;
+                    PlayMusicStream(gameAudio->bossMusic);
+                }
+
+                if (currentAct == 4 && choice == 1) {
+                    // Player chose "Yes" → play pre-boss dialogue sequence
+                    UnloadScreenDialogue();
+                    LoadDialogueFile("../assets/dialogue/preboss.txt");
+                    isInGameDialogue = true;
+                    pendingBossDialogue = true;
                     return GAMEPLAY;
                 }
                 UnloadScreenDialogue();
@@ -731,6 +804,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                     if (CheckCollisionRecs(playerHitbox, map.nextActTrigger)) {
                         objEvacuateDone = true;
                         SetupAct(1); // Load Act 2 map NOW so player is already there
+                        StopMusicStream(gameAudio->gameMusic);
                         LoadDialogueFile("../assets/dialogue/act2.txt");
                         return DIALOGUE;
                     }
@@ -766,6 +840,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                             if (IsKeyPressed(KEY_E)) {
                                 nearOrionTrigger = false;
                                 SetupAct(2); // Load Act 3 map NOW so player is already there
+                                StopMusicStream(gameAudio->gameMusic);
                                 LoadDialogueFile("../assets/dialogue/act3.txt");
                                 return DIALOGUE;
                             }
@@ -824,6 +899,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                             if (hasKeycardA && hasKeycardB) {
                                 nearAct3Exit = false;
                                 SetupAct(3); // Load Act 4 map NOW
+                                StopMusicStream(gameAudio->gameMusic);
                                 LoadDialogueFile("../assets/dialogue/act4.txt");
                                 return DIALOGUE;
                             } else {
@@ -887,6 +963,7 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
                             if (act4DoorUnlocked) {
                                 nearAct4Exit = false;
                                 SetupAct(4); // Load next map
+                                StopMusicStream(gameAudio->gameMusic);
                                 LoadDialogueFile("../assets/dialogue/act5.txt");
                                 return DIALOGUE;
                             } else {
@@ -973,7 +1050,8 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
                 if (CheckCollisionRecs(playerBounds, enemyBounds)) {
                     // Deal damage to player
-                    player.health -= 50.0f;
+                    float dmg = (currentDifficulty == DIFF_EASY) ? 20.0f : ((currentDifficulty == DIFF_NORMAL) ? 30.0f : 50.0f);
+                    player.health -= dmg;
                     if (player.health < 0.0f) player.health = 0.0f;
                     player.hitInvincibleTimer = 1.0f; // 1 second of i-frames
                     TriggerShake(8.0f, 0.20f);
@@ -1013,6 +1091,28 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
             if (player.health < 0.0f) player.health = 0.0f;
             player.hitInvincibleTimer = 1.0f;
             TriggerShake(8.0f, 0.20f);
+        }
+        
+        // Detect Stage 1 → Stage 2 transition and trigger cutscene
+        if (currentBoss.state == BOSS_STATE_STAGE2 && !bossStage2CutscenePlayed) {
+            bossStage2CutscenePlayed = true;
+            StopMusicStream(gameAudio->bossMusic);
+            stage2DialogueActive = true;
+            LoadDialogueFile("../assets/dialogue/character/boss_stage2.txt");
+            isInGameDialogue = true;
+        }
+        
+        // Detect Stage 2 Defeat and trigger ending
+        if (currentBoss.state == BOSS_STATE_DEAD && !bossDefeatedDialoguePlayed) {
+            bossDefeatedDialoguePlayed = true;
+            StopMusicStream(gameAudio->bossMusic);
+            if (hasHazmatSuit) {
+                LoadDialogueFile("../assets/dialogue/ending2.txt");
+            } else {
+                LoadDialogueFile("../assets/dialogue/ending1.txt");
+            }
+            isInGameDialogue = true;
+            pendingCredits = true;
         }
     }
 
@@ -1095,7 +1195,11 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
                 if (currentAct == 5) {
                     Vector2 bossPos = map.hasBossSpawnPoint ? map.bossSpawnPoint : (Vector2){ 1546, 1248 };
-                    InitBoss(&currentBoss, bossPos, bossSprite, meteorSprite, 500.0f, 1000.0f);
+                    InitBoss(&currentBoss, bossPos, bossS1Idle, bossS1Meteor, bossS2Idle, bossS2Charge, meteorProjectile, 500.0f, 1000.0f);
+                    bossStage2CutscenePlayed = false;
+                    stage2DialogueActive = false;
+                    StopMusicStream(gameAudio->bossMusic);
+                    PlayMusicStream(gameAudio->bossMusic);
                 }
 
                 // Reset generator puzzle progress
@@ -1150,6 +1254,10 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
     // ── Timers ────────────────────────────────────────────────────────────────
     if (shakeTimer > 0.0f) shakeTimer -= dt;
     if (pickupTimer > 0.0f) pickupTimer -= dt;
+
+    if (currentAct == 5 && !stage2DialogueActive && !isInGameDialogue) {
+        UpdateMusicStream(gameAudio->bossMusic);
+    }
 
     return GAMEPLAY;
 }
@@ -1521,8 +1629,11 @@ void UnloadScreenGameplay(void)
         if (enemySpriteL[t].id != 0) UnloadTexture(enemySpriteL[t]);
     }
     
-    if (bossSprite.id != 0) UnloadTexture(bossSprite);
-    if (meteorSprite.id != 0) UnloadTexture(meteorSprite);
+    if (bossS1Idle.id != 0) UnloadTexture(bossS1Idle);
+    if (bossS1Meteor.id != 0) UnloadTexture(bossS1Meteor);
+    if (bossS2Idle.id != 0) UnloadTexture(bossS2Idle);
+    if (bossS2Charge.id != 0) UnloadTexture(bossS2Charge);
+    if (meteorProjectile.id != 0) UnloadTexture(meteorProjectile);
     
     // Unload puzzle assets
     if (imgCode.id != 0) UnloadTexture(imgCode);

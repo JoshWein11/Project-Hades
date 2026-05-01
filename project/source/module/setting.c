@@ -3,6 +3,7 @@
 
 // Global static settings instance
 static GameSettings currentSettings = {0};
+GameDifficulty currentDifficulty = DIFF_NORMAL;
 
 // Called once at the start of the program to set default values.
 // This runs before the window is created, so the window uses these values.

@@ -78,8 +78,15 @@ typedef struct {
     BossCore cores[BOSS_MAX_CORES];
     BossMeteor meteors[BOSS_MAX_METEORS];
     
-    Texture2D sprite; // Can be 0 if not loaded, fallback to rect
-    Texture2D meteorSprite;
+    Texture2D stage1IdleTex;
+    Texture2D stage1MeteorTex;
+    Texture2D stage2IdleTex;
+    Texture2D stage2ChargeTex;
+    Texture2D meteorProjectileTex;
+    
+    int animFrame;
+    float animTimer;
+    bool facingRight;
     int frameWidth;
     int frameHeight;
     float scale;
@@ -91,7 +98,7 @@ typedef struct {
 // API
 // ─────────────────────────────────────────────────────────────────────────────
 
-void InitBoss(Boss* boss, Vector2 spawnPos, Texture2D sprite, Texture2D meteorSprite, float baseMaxHp, float stage2MaxHp);
+void InitBoss(Boss* boss, Vector2 spawnPos, Texture2D s1Idle, Texture2D s1Meteor, Texture2D s2Idle, Texture2D s2Charge, Texture2D meteorProjectile, float baseMaxHp, float stage2MaxHp);
 void UpdateBoss(Boss* boss, Vector2 playerPos, float dt, Rectangle* colliders, int colliderCount, bool* playerHit, float* outDamage);
 void DrawBoss(Boss* boss);
 void DrawBossUI(Boss* boss);
@@ -100,7 +107,7 @@ void DamageBossCore(Boss* boss, int coreIndex, float amount);
 
 // Helper for external checks
 static inline Vector2 BossCentre(const Boss* boss) {
-    if (boss->sprite.id == 0) return boss->position; // Fallback
+    // If no sprite, fallback to basic rectangle math
     return (Vector2){
         boss->position.x + (boss->frameWidth * boss->scale) * 0.5f,
         boss->position.y + (boss->frameHeight * boss->scale) * 0.5f

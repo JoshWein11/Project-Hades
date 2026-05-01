@@ -1,0 +1,189 @@
+CMD|CINEMATIC|3
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+CMD|CHAR|LYRA|lyra_l.png|lyra_r.png
+---
+CMD|BG|end_scene1.qoi
+CMD|BGM|bgm3.wav
+CMD|WAIT|1.0
+---
+CMD|BG|end_scene2.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|ending_1.mp3
+---
+LYRA|left
+Dad...?
+---
+CMD|SFX|ending_2.mp3
+---
+ADRIAN|right
+Lyra... I'm here... I've got you...
+---
+CMD|SFX|ending_3.mp3
+---
+ADRIAN|right
+I should've never left you...
+---
+CMD|BG|end_scene3.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|ending_4.mp3
+---
+LYRA|left
+You didn't... you came back...
+---
+CMD|SFX|ending_5.mp3
+---
+LYRA|left
+It was... dark... but I wasn't scared
+---
+CMD|SFX|ending_6.mp3
+---
+ADRIAN|right
+You don't have to be scared anymore...
+---
+CMD|SFX|ending_7.mp3
+---
+LYRA|left
+I knew... you'd find me...
+---
+CMD|SFX|ending_8.mp3
+---
+ADRIAN|right
+I'm right here... I'm not going anywhere
+---
+CMD|SFX|ending_9.mp3
+---
+LYRA|left
+I love you dad...
+---
+CMD|SFX|ending_10.mp3
+---
+ADRIAN|right
+I love you too... more than anything
+---
+CMD|BG|end_scene4.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|ending_11.mp3
+---
+ADRIAN|right
+Lyra... stay with me
+---
+CMD|SFX|ending_12.mp3
+---
+ADRIAN|right
+No.. no please
+---
+CMD|BG|end_scene5.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|ending_13.mp3
+---
+ORION|right
+Facility integrity critical. Structural collapse imminent.
+---
+CMD|SFX|ending_14.mp3
+---
+ORION|right
+Hades's population exceeded containment thresholds. Surface breach likely.
+---
+CMD|SFX|ending_15.mp3
+---
+ADRIAN|left
+Then we're out of time
+---
+CMD|BG|end_scene6.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|ending_16.mp3
+---
+ORION|right
+Sterilization gas protocol available.
+Activation will neutralize all biological life within the facility.
+---
+CMD|SFX|ending_17.mp3
+---
+ORION|right
+Confirming activation will initiate irreversible sequence.
+---
+CMD|SFX|ending_18.mp3
+---
+ADRIAN|left
+Do it!
+---
+CMD|SFX|ending_19.mp3
+---
+ORION|right
+Sterilization protocol engaged.
+---
+CMD|SFX|ending_20.mp3
+---
+ORION|right
+Gas dispersal in progress.
+---
+CMD|SFX|ending_21.mp3
+---
+ORION|right
+Recommend immediate evacuation.
+---
+CMD|BG|1end_1.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|1end_1.mp3
+---
+ORION|right
+Sterilization gas dispersal active.
+---
+CMD|SFX|1end_2.mp3
+---
+ORION|right
+No protective equipment detected. Survival probability: zero.
+---
+CMD|SFX|1end_3.mp3
+---
+ADRIAN|left
+Understood...
+---
+CMD|BG|1end_2.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|1end_4.mp3
+---
+ORION|right
+Gas concentration increasing. Lethal levels imminent.
+---
+CMD|SFX|1end_5.mp3
+---
+ADRIAN|left
+It was always going to end like this
+---
+CMD|SFX|1end_6.mp3
+---
+ADRIAN|left
+Everything that happened... This was my doing
+---
+CMD|SFX|1end_7.mp3
+---
+ADRIAN|left
+My choices... My mistakes...
+---
+CMD|SFX|1end_8.mp3
+---
+ADRIAN|left
+I don't... get to walk away from It
+---
+CMD|BG|1end_3.qoi
+CMD|WAIT|0.1
+---
+CMD|SFX|1end_9.mp3
+---
+ADRIAN|left
+Lyra... I'm coming
+---
+CMD|SFX|1end_10.mp3
+---
+ADRIAN|left
+It's over
+---

@@ -70,6 +70,7 @@ static Vector2 targetCamOffset = {0};
 static Vector2 startCamOffset = {0};
 static float camShiftTimer = 0.0f;
 static float camShiftDuration = 0.0f;
+static Vector2 dialoguePlayerPos = {0}; // Set by gameplay for CAMTO
 
 // State for CHOICE event (Yes/No branching)
 static char choiceLabel1[64] = {0};  // First option label (e.g. "Yes")
@@ -93,6 +94,16 @@ static char dialogueCurrent[256] = "\0";
 static int dialogueLength = 0;
 static int textIndex = 0;
 static bool isFinishedTyping = false;
+static bool needsTypewriterReset = true;
+
+// Auto-advance feature state
+static bool autoAdvance = false;
+static float autoAdvanceTimer = 0.0f;
+static float autoAdvanceDelay = 2.0f; // Default delay
+#define AUTO_ADVANCE_DELAY_FRAMES 120   // ~2 seconds at 60 FPS
+
+// Cinematic (unskippable auto-advance) state
+static bool cinematicActive = false;
 
 // Helper: trim leading/trailing whitespace and carriage returns in-place
 static void TrimString(char* str)
@@ -169,6 +180,7 @@ static void ResetTypewriter(void)
     isFinishedTyping = false;
     dialogueLength = (int)strlen(events[currentEvent].text);
     memset(dialogueCurrent, 0, sizeof(dialogueCurrent));
+    autoAdvanceTimer = 0.0f;
 }
 
 // Helper: parse a single dialogue block (speaker line + text line)
@@ -245,6 +257,10 @@ void InitScreenDialogue(const char* dialogueFile)
     camShiftTimer = 0.0f;
     camShiftDuration = 0.0f;
     lastChoiceResult = 0;
+    autoAdvance = false;
+    autoAdvanceTimer = 0.0f;
+    autoAdvanceDelay = 2.0f;
+    cinematicActive = false;
     choiceHovered = 0;
     memset(choiceLabel1, 0, sizeof(choiceLabel1));
     memset(choiceLabel2, 0, sizeof(choiceLabel2));
@@ -385,6 +401,31 @@ void InitScreenDialogue(const char* dialogueFile)
                                     ev->floatArg2 = (float)atof(dy);
                                     ev->floatArg3 = (float)atof(dur);
                                     eventCount++;
+                                } else if (strcmp(cmdType, "CAMTO") == 0) {
+                                    // CMD|CAMTO|worldX|worldY|duration
+                                    char wx[16] = {0}, wy[16] = {0}, dur[16] = {0};
+                                    char* p1 = strchr(cmdArg, '|');
+                                    if (p1) {
+                                        int len1 = (int)(p1 - cmdArg);
+                                        if (len1 >= 16) len1 = 15;
+                                        strncpy(wx, cmdArg, len1);
+                                        char* p2 = strchr(p1 + 1, '|');
+                                        if (p2) {
+                                            int len2 = (int)(p2 - p1 - 1);
+                                            if (len2 >= 16) len2 = 15;
+                                            strncpy(wy, p1 + 1, len2);
+                                            strncpy(dur, p2 + 1, 15);
+                                        } else {
+                                            strncpy(wy, p1 + 1, 15);
+                                        }
+                                    } else {
+                                        strncpy(wx, cmdArg, 15);
+                                    }
+                                    ev->type = EVENT_CAMERA_TO;
+                                    ev->floatArg = (float)atof(wx);   // world X
+                                    ev->floatArg2 = (float)atof(wy);  // world Y
+                                    ev->floatArg3 = (float)atof(dur); // duration
+                                    eventCount++;
                                 } else if (strcmp(cmdType, "CHOICE") == 0) {
                                     // CMD|CHOICE|Label1|Label2
                                     // cmdArg = "Label1|Label2"
@@ -407,6 +448,11 @@ void InitScreenDialogue(const char* dialogueFile)
                                     ev->type = EVENT_CHOICE;
                                     // Store both labels in text separated by '|'
                                     snprintf(ev->text, sizeof(ev->text), "%s|%s", label1, label2);
+                                    eventCount++;
+                                } else if (strcmp(cmdType, "CINEMATIC") == 0) {
+                                    ev->type = EVENT_CINEMATIC;
+                                    ev->floatArg = (float)atof(cmdArg);
+                                    if (ev->floatArg <= 0.0f) ev->floatArg = 3.0f;
                                     eventCount++;
                                 } else if (strcmp(cmdType, "CHAR") == 0 && charRegistryCount < MAX_CHARACTERS) {
                                     // CMD|CHAR|NAME|left_img.png|right_img.png
@@ -510,14 +556,18 @@ void ResetScreenDialogue(void)
     camShiftTimer = 0.0f;
     camShiftDuration = 0.0f;
     choiceHovered = 0;
+    autoAdvance = false;
+    autoAdvanceTimer = 0.0f;
+    autoAdvanceDelay = 2.0f;
+    cinematicActive = false;
     
     if (hasActiveBgm) {
         StopMusicStream(activeBgm);
         hasActiveBgm = false;
     }
 
-    if (eventCount > 0 && events[0].type == EVENT_DIALOGUE) {
-        ResetTypewriter();
+    if (eventCount > 0) {
+        needsTypewriterReset = true;
     }
 }
 
@@ -526,21 +576,22 @@ GameScreen UpdateScreenDialogue(Audio* audio)
     // Fast-forward through non-blocking events (BG, BGM, SFX)
     while (currentEvent < eventCount) {
         SceneEvent* ev = &events[currentEvent];
+        
         if (ev->type == EVENT_BG) {
-            activeBg = GetCachedTexture(ev->text);
-            hasActiveBg = (activeBg.id > 0);
-            currentEvent++;
-        } else if (ev->type == EVENT_BGM) {
-            if (hasActiveBgm) StopMusicStream(activeBgm);
-            activeBgm = GetCachedMusic(ev->text);
-            hasActiveBgm = (activeBgm.stream.buffer != NULL);
-            if (hasActiveBgm) PlayMusicStream(activeBgm);
-            currentEvent++;
-        } else if (ev->type == EVENT_SFX) {
-            Sound s = GetCachedSound(ev->text);
-            if (s.stream.buffer != NULL) PlaySound(s);
-            currentEvent++;
-        } else if (ev->type == EVENT_CAMERA) {
+                activeBg = GetCachedTexture(ev->text);
+                hasActiveBg = (activeBg.id > 0);
+                currentEvent++;
+            } else if (ev->type == EVENT_BGM) {
+                if (hasActiveBgm) StopMusicStream(activeBgm);
+                activeBgm = GetCachedMusic(ev->text);
+                hasActiveBgm = (activeBgm.stream.buffer != NULL);
+                if (hasActiveBgm) PlayMusicStream(activeBgm);
+                currentEvent++;
+            } else if (ev->type == EVENT_SFX) {
+                Sound s = GetCachedSound(ev->text);
+                if (s.stream.buffer != NULL) PlaySound(s);
+                currentEvent++;
+            } else if (ev->type == EVENT_CAMERA) {
             targetCamOffset = (Vector2){ ev->floatArg, ev->floatArg2 };
             startCamOffset = currentCamOffset;
             camShiftDuration = ev->floatArg3;
@@ -548,6 +599,23 @@ GameScreen UpdateScreenDialogue(Audio* audio)
             if (camShiftDuration <= 0.0f) {
                 currentCamOffset = targetCamOffset;
             }
+            currentEvent++;
+        } else if (ev->type == EVENT_CAMERA_TO) {
+            // Compute offset: target world pos minus player world pos
+            float offsetX = ev->floatArg - dialoguePlayerPos.x;
+            float offsetY = ev->floatArg2 - dialoguePlayerPos.y;
+            targetCamOffset = (Vector2){ offsetX, offsetY };
+            startCamOffset = currentCamOffset;
+            camShiftDuration = ev->floatArg3;
+            camShiftTimer = 0.0f;
+            if (camShiftDuration <= 0.0f) {
+                currentCamOffset = targetCamOffset;
+            }
+            currentEvent++;
+        } else if (ev->type == EVENT_CINEMATIC) {
+            cinematicActive = true;
+            autoAdvanceDelay = ev->floatArg;
+            TraceLog(LOG_INFO, "CINEMATIC: Enabled with delay=%.1fs", autoAdvanceDelay);
             currentEvent++;
         } else {
             // Found a blocking event (WAIT or DIALOGUE)
@@ -558,6 +626,14 @@ GameScreen UpdateScreenDialogue(Audio* audio)
     // Always update BGM if it's playing
     if (hasActiveBgm) {
         UpdateMusicStream(activeBgm);
+    }
+    
+    // Process typewriter reset for freshly encountered dialogues
+    if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
+        if (needsTypewriterReset) {
+            ResetTypewriter();
+            needsTypewriterReset = false;
+        }
     }
     
     // Smooth camera interpolation
@@ -588,9 +664,7 @@ GameScreen UpdateScreenDialogue(Audio* audio)
         if (waitTimerFrames >= waitTargetFrames) {
             waitTargetFrames = 0;
             currentEvent++;
-            if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
-                ResetTypewriter();
-            }
+            needsTypewriterReset = true;
         }
     } 
     else if (current->type == EVENT_TITLE) {
@@ -624,8 +698,8 @@ GameScreen UpdateScreenDialogue(Audio* audio)
                 }
                 break;
         }
-        // Allow skipping with click or space
-        if (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        // Allow skipping with click or space (blocked during cinematic)
+        if (!cinematicActive && (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
             if (titlePhase != TITLE_FADE_OUT) {
                 // Jump to fade-out
                 titlePhase = TITLE_FADE_OUT;
@@ -687,25 +761,59 @@ GameScreen UpdateScreenDialogue(Audio* audio)
                     dialogueCurrent[textIndex] = current->text[textIndex];
                     dialogueCurrent[textIndex + 1] = '\0';
                     textIndex++;
-                    PlayRandomSpeaking(audio);
+                    if (!cinematicActive) PlayRandomSpeaking(audio);
                 } else {
                     isFinishedTyping = true;
                 }
             }
         }
-        
-        // Input logic to advance
-        if (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            if (!isFinishedTyping) {
-                // Speed up typing
-                strcpy(dialogueCurrent, current->text);
-                isFinishedTyping = true;
-                textIndex = dialogueLength;
+
+        if (cinematicActive) {
+            // ── Cinematic mode: wait before advancing ──
+            if (isFinishedTyping) {
+                autoAdvanceTimer += GetFrameTime();
+                if (autoAdvanceTimer >= autoAdvanceDelay) {
+                    autoAdvanceTimer = 0.0f;
+                    currentEvent++;
+                    needsTypewriterReset = true;
+                }
             } else {
-                // Advance
-                currentEvent++;
-                if (currentEvent < eventCount && events[currentEvent].type == EVENT_DIALOGUE) {
-                    ResetTypewriter();
+                autoAdvanceTimer = 0.0f;
+            }
+        } else {
+            // ── Normal mode: handle AUTO button + manual input ──
+            Vector2 mousePoint = GetVirtualMouse();
+            // AUTO button hit area — top-right corner (matches draw position)
+            Rectangle autoBtn = { (float)(VIRTUAL_WIDTH - 140), 15.0f, 120.0f, 40.0f };
+            bool autoClicked = false;
+
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mousePoint, autoBtn)) {
+                autoAdvance = !autoAdvance;
+                autoAdvanceTimer = 0;
+                autoClicked = true; // Consume the click
+            }
+
+            // Auto-advance logic
+            if (isFinishedTyping && autoAdvance) {
+                autoAdvanceTimer += GetFrameTime();
+                if (autoAdvanceTimer >= autoAdvanceDelay) {
+                    autoAdvanceTimer = 0.0f;
+                    currentEvent++;
+                    needsTypewriterReset = true;
+                }
+            }
+
+            // Manual input logic to advance (skip if AUTO button was clicked)
+            if (!autoClicked && (IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT))) {
+                if (!isFinishedTyping) {
+                    // Speed up typing
+                    strcpy(dialogueCurrent, current->text);
+                    isFinishedTyping = true;
+                    textIndex = dialogueLength;
+                } else {
+                    // Advance
+                    currentEvent++;
+                    needsTypewriterReset = true;
                 }
             }
         }
@@ -877,11 +985,23 @@ void DrawScreenDialogue(void)
     // Draw typing text
     DrawText(dialogueCurrent, (int)dialogBox.x + 20, (int)dialogBox.y + 20, 24, LIGHTGRAY);
     
-    // Blinking prompt
-    if (isFinishedTyping) {
-        framesCounter++;
-        if ((framesCounter / 30) % 2 == 0) {
-            DrawText(">>", (int)(dialogBox.x + dialogBox.width - 30), (int)(dialogBox.y + dialogBox.height - 30), 20, WHITE);
+    // Only show interactive UI elements when NOT in cinematic
+    if (!cinematicActive) {
+        // AUTO button — top-right corner of screen
+        Rectangle autoBtn = { (float)(VIRTUAL_WIDTH - 140), 15.0f, 120.0f, 40.0f };
+        Color autoBg = autoAdvance ? Fade(YELLOW, 0.3f) : Fade(WHITE, 0.15f);
+        Color autoTextColor = autoAdvance ? YELLOW : GRAY;
+        DrawRectangleRec(autoBtn, autoBg);
+        DrawRectangleLinesEx(autoBtn, 2.0f, autoAdvance ? Fade(YELLOW, 0.6f) : Fade(WHITE, 0.3f));
+        int autoTextW = MeasureText("AUTO", 22);
+        DrawText("AUTO", (int)(autoBtn.x + (autoBtn.width - autoTextW) / 2.0f), (int)(autoBtn.y + 9), 22, autoTextColor);
+
+        // Blinking prompt
+        if (isFinishedTyping) {
+            framesCounter++;
+            if ((framesCounter / 30) % 2 == 0) {
+                DrawText(">>", (int)(dialogBox.x + dialogBox.width - 30), (int)(dialogBox.y + dialogBox.height - 30), 20, WHITE);
+            }
         }
     }
 }
@@ -936,4 +1056,9 @@ Vector2 GetDialogueCameraOffset(void)
 int GetDialogueChoiceResult(void)
 {
     return lastChoiceResult;
+}
+
+void SetDialoguePlayerPos(Vector2 pos)
+{
+    dialoguePlayerPos = pos;
 }

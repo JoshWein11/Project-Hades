@@ -10,6 +10,9 @@ typedef struct audio{
     Sound sfxSplash;
     Sound sfxFootsteps[MAX_FOOTSTEP_SOUNDS];
     Sound sfxSpeaking[4]; // Typing/speaking sounds
+    Music bossMusic;
+    Music gameMusic;
+
 }Audio;
 
 void InitAudio(Audio* audio);

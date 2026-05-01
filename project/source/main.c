@@ -8,6 +8,8 @@
 #include "screen_dialogue.h"
 #include "screen_gameplay.h"
 #include "screen_setting.h"
+#include "screen_credits.h"
+#include "screen_difficulty.h"
 
 // Include Audio Module
 #include "audio.h"
@@ -77,6 +79,8 @@ int main(void)
                 break;
             case MAIN_MENU:
                 if (!IsMusicStreamPlaying(gameAudio.bg_menu_music)) {
+                    StopMusicStream(gameAudio.gameMusic);
+                    StopMusicStream(gameAudio.bossMusic);
                     PlayMusicStream(gameAudio.bg_menu_music);
                 }
                 UpdateMusicStream(gameAudio.bg_menu_music);
@@ -84,9 +88,12 @@ int main(void)
                 currentScreen = UpdateScreenMenu();
                 // Special case for settings toggle from within the menu module
                 if (currentScreen == SETTINGS) previousScreen = MAIN_MENU;
-                // "Start" was pressed — reset dialogue and gameplay for a fresh run
+                break;
+            case DIFFICULTY_SELECT:
+                currentScreen = UpdateScreenDifficulty();
                 if (currentScreen == DIALOGUE) {
                     LoadDialogueFile("../assets/dialogue/opening.txt");
+                    ResetScreenDialogue();
                     InitScreenGameplay();
                 }
                 break;
@@ -104,6 +111,8 @@ int main(void)
                     save.currentScreen    = (int)GAMEPLAY;
                     save.dialogueFinished = true;
                     SaveGame(&save, SAVE_FILEPATH);
+                } else if (next == CREDITS) {
+                    InitScreenCredits();
                 }
                 currentScreen = next;
                 break;
@@ -137,6 +146,9 @@ int main(void)
                 }
                 break;
             }
+            case CREDITS:
+                currentScreen = UpdateScreenCredits();
+                break;
             default: break;
         }
         }
@@ -153,6 +165,9 @@ int main(void)
                 case MAIN_MENU:
                     DrawScreenMenu();
                     break;
+                case DIFFICULTY_SELECT:
+                    DrawScreenDifficulty();
+                    break;
                 case DIALOGUE:
                     DrawScreenDialogue();
                     break;
@@ -161,6 +176,9 @@ int main(void)
                     break;
                 case SETTINGS:
                     DrawScreenSetting();
+                    break;
+                case CREDITS:
+                    DrawScreenCredits();
                     break;
                 default: break;
             }
