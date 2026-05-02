@@ -479,7 +479,7 @@ void DrawBossUI(Boss* boss) {
     DrawRectangle(barX, barY, barWidth * hpPct, barHeight, RED);
     DrawRectangleLines(barX, barY, barWidth, barHeight, WHITE);
 
-    const char* title = (boss->stage == 1) ? "STAGE 1: PROTOCOL GUARDIAN" : "STAGE 2: PROTOCOL ANOMALY";
+    const char* title = "PRIME ABERRANT - HADES";
     int textWidth = MeasureText(title, 20);
     DrawText(title, barX + barWidth/2 - textWidth/2, barY + 4, 20, WHITE);
     

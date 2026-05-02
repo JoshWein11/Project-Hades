@@ -14,6 +14,8 @@ static float scrollSpeed = 50.0f; // Pixels per second
 static float holdTimer = 0.0f;
 static bool skipPrompted = false;
 static float skipPromptTimer = 0.0f;
+static Music creditMusic = {0};
+static bool hasCreditMusic = false;
 
 // Extern declarations for virtual resolution if available, otherwise fallback
 extern const int VIRTUAL_WIDTH;
@@ -28,6 +30,11 @@ void InitScreenCredits(void) {
     holdTimer = 5.0f; // Time to hold on screen after finishing
     skipPrompted = false;
     skipPromptTimer = 0.0f;
+
+    // Load and play credit music
+    creditMusic = LoadMusicStream("../assets/music/credit.mp3");
+    hasCreditMusic = (creditMusic.stream.buffer != NULL);
+    if (hasCreditMusic) PlayMusicStream(creditMusic);
 
     FILE *file = fopen("../assets/dialogue/credits.txt", "r");
     if (file) {
@@ -55,11 +62,14 @@ void InitScreenCredits(void) {
 
 GameScreen UpdateScreenCredits(void) {
     float dt = GetFrameTime();
+
+    if (hasCreditMusic) UpdateMusicStream(creditMusic);
     
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_E) || IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (skipPrompted && skipPromptTimer > 0.0f) {
             // Add 0.5s immunity to prevent accidental double-clicks
             if (skipPromptTimer <= 2.5f) {
+                if (hasCreditMusic) StopMusicStream(creditMusic);
                 return MAIN_MENU;
             }
         } else {
@@ -81,6 +91,7 @@ GameScreen UpdateScreenCredits(void) {
     } else {
         holdTimer -= dt;
         if (holdTimer <= 0.0f) {
+            if (hasCreditMusic) StopMusicStream(creditMusic);
             return MAIN_MENU;
         }
     }
@@ -139,5 +150,9 @@ void DrawScreenCredits(void) {
 }
 
 void UnloadScreenCredits(void) {
-    // Nothing to unload
+    if (hasCreditMusic) {
+        StopMusicStream(creditMusic);
+        UnloadMusicStream(creditMusic);
+        hasCreditMusic = false;
+    }
 }

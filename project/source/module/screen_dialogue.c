@@ -39,7 +39,7 @@ static Music activeBgm;
 static bool hasActiveBgm = false;
 
 // Asset caches for dynamic loading
-#define MAX_CACHE 32
+#define MAX_CACHE 64
 static Texture2D cachedTextures[MAX_CACHE];
 static char cachedTextureNames[MAX_CACHE][128];
 static int texCacheCount = 0;

@@ -1,0 +1,12 @@
+CMD|CHAR|ORION|orion_l.png|orion_r.png
+CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
+---
+ORION|right
+There's a door here...
+---
+ADRIAN|left
+Password... Lucky I wrote that down before
+---
+ORION|right
+Good idea
+---
