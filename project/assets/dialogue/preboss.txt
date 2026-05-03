@@ -3,7 +3,7 @@ CMD|CHAR|ADRIAN|voss_l.png|voss_r.png
 CMD|CHAR|ORION|orion_l.png|orion_r.png
 ---
 CMD|BG|preboss_scene1.qoi
-CMD|BGM|bgm3.wav
+CMD|BGM|act_4.wav
 CMD|WAIT|0.1
 ---
 CMD|SFX|boss_1.mp3

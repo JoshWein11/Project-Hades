@@ -4,7 +4,7 @@ CMD|CHAR|ORION|orion_l.png|orion_r.png
 CMD|CHAR|LYRA|lyra_l.png|lyra_r.png
 ---
 CMD|BG|end_scene1.qoi
-CMD|BGM|bgm3.wav
+CMD|BGM|act_5.wav
 CMD|WAIT|1.0
 ---
 CMD|BG|end_scene2.qoi
@@ -78,6 +78,7 @@ No.. no please
 ---
 CMD|BG|end_scene5.qoi
 CMD|WAIT|0.1
+CMD|BGM|act_6.wav
 ---
 CMD|SFX|ending_13.mp3
 ---
@@ -130,6 +131,7 @@ Recommend immediate evacuation.
 ---
 CMD|BG|1end_1.qoi
 CMD|WAIT|0.1
+CMD|BGM|ending_2.wav
 ---
 CMD|SFX|1end_1.mp3
 ---
