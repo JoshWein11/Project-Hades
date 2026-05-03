@@ -79,6 +79,8 @@ static int       rgbMapIndex = -1;      // Tiled object index
 static bool      rgbNearby = false;     // Player near rgb puzzle
 static Sound     sfxButton;
 static Sound     sfxFail;
+static Sound     sfxGunshot;
+static Sound     sfxMeteor;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Level 3 Puzzle System (Act 4)
@@ -531,6 +533,8 @@ void InitScreenGameplay(void)
     InitHazardPuzzle(&hazardPuzzle);
     sfxButton = LoadSound("../assets/sfx/button.wav");
     sfxFail = LoadSound("../assets/sfx/button_fail.wav");
+    sfxGunshot = LoadSound("../assets/sfx/gun_sfx.wav");
+    sfxMeteor = LoadSound("../assets/sfx/meteor_sfx.wav");
 
     bossS1Idle = LoadTexture("../assets/enemy/stage1boss_idle.png");
     bossS1Meteor = LoadTexture("../assets/enemy/stage1boss_meteor.png");
@@ -1085,6 +1089,13 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
         bool playerHitByBoss = false;
         float bossDamage = 0.0f;
         UpdateBoss(&currentBoss, playerCentre, dt, map.collisionRecs, map.collisionCount, &playerHitByBoss, &bossDamage);
+
+        // Play meteor SFX when boss starts a meteor attack
+        static BossAttackType prevBossAttack = BOSS_ATTACK_NONE;
+        if (currentBoss.currentAttack == BOSS_ATTACK_METEOR && prevBossAttack != BOSS_ATTACK_METEOR) {
+            PlaySound(sfxMeteor);
+        }
+        prevBossAttack = currentBoss.currentAttack;
         
         if (playerHitByBoss && player.hitInvincibleTimer <= 0.0f && !player.playerInvincible) {
             player.health -= bossDamage;
@@ -1155,7 +1166,12 @@ GameScreen UpdateScreenGameplay(Audio* gameAudio)
 
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             Vector2 startPos = { playerCentre.x, playerCentre.y };
+            float prevCooldown = playerWeapon.cooldownTimer;
             ShootWeapon(&playerWeapon, startPos, mouseWorldPos);
+            // Play gun SFX only when a bullet was actually fired
+            if (prevCooldown <= 0.0f && playerWeapon.cooldownTimer > 0.0f) {
+                PlaySound(sfxGunshot);
+            }
         }
     } // End Core Gameplay Logic
 
@@ -1648,6 +1664,8 @@ void UnloadScreenGameplay(void)
     if (rgbPuzzle.textures[2].id != 0) UnloadTexture(rgbPuzzle.textures[2]);
     if (sfxButton.frameCount > 0) UnloadSound(sfxButton);
     if (sfxFail.frameCount > 0) UnloadSound(sfxFail);
+    if (sfxGunshot.frameCount > 0) UnloadSound(sfxGunshot);
+    if (sfxMeteor.frameCount > 0) UnloadSound(sfxMeteor);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

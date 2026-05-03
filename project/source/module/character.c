@@ -53,7 +53,7 @@ void InitCharacter(Character* player, int startX, int startY, const char* sprite
     player->staminaRegenRate = 30.0f;         // Recovers 30 stamina per second
 
     // Health Init
-    player->maxHealth = 100000.0f;
+    player->maxHealth = 100.0f;
     player->health    = player->maxHealth; // Start at full health
 
     // Trail Init
